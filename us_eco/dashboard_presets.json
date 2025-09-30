@@ -1,0 +1,398 @@
+{
+  "테스트": {
+    "series_keys": [
+      "CPI_analysis_refactor::headline",
+      "CPI_analysis_refactor::core"
+    ],
+    "series_labels": {
+      "CPI_analysis_refactor::headline": "CPI · 전체 품목 (헤드라인 CPI)",
+      "CPI_analysis_refactor::core": "CPI · 식품·에너지 제외 (코어 CPI)"
+    },
+    "series_info": [
+      {
+        "key": "CPI_analysis_refactor::headline",
+        "표시 이름": "CPI · 전체 품목 (헤드라인 CPI)",
+        "모듈": "CPI",
+        "대분류": "물가",
+        "데이터 타입": "수준",
+        "원본 ID": "headline"
+      },
+      {
+        "key": "CPI_analysis_refactor::core",
+        "표시 이름": "CPI · 식품·에너지 제외 (코어 CPI)",
+        "모듈": "CPI",
+        "대분류": "물가",
+        "데이터 타입": "수준",
+        "원본 ID": "core"
+      }
+    ],
+    "custom_labels": {},
+    "global_dtype_key": "raw_data",
+    "per_series_override": false,
+    "dtype_map": {
+      "CPI_analysis_refactor::headline": "raw_data",
+      "CPI_analysis_refactor::core": "raw_data"
+    },
+    "series_type_map": {
+      "CPI · 전체 품목 (헤드라인 CPI)": "raw_data",
+      "CPI · 식품·에너지 제외 (코어 CPI)": "raw_data"
+    },
+    "chart_type": "multi_line",
+    "chart_type_label": "멀티 라인",
+    "chart_width_cm": 24.0,
+    "chart_height_cm": 12.0,
+    "single_axis_title": "",
+    "left_axis_title": "",
+    "right_axis_title": "",
+    "left_title_offset": 0.0,
+    "right_title_offset": 0.0,
+    "dual_axis_left": [],
+    "dual_axis_right": [],
+    "five_year_recent_years": null,
+    "active_series_keys": [
+      "CPI_analysis_refactor::headline",
+      "CPI_analysis_refactor::core"
+    ],
+    "display_labels": [
+      "CPI · 전체 품목 (헤드라인 CPI)",
+      "CPI · 식품·에너지 제외 (코어 CPI)"
+    ],
+    "axis_label_default": "수준",
+    "generated_at": "2025-09-19T09:43:37",
+    "saved_at": "2025-09-19T09:43:37",
+    "name": "테스트"
+  },
+  "테스트2": {
+    "series_keys": [
+      "PPI_analysis_refactor::final_demand_sa"
+    ],
+    "series_labels": {
+      "PPI_analysis_refactor::final_demand_sa": "PPI · 최종수요 (계절조정)"
+    },
+    "series_info": [
+      {
+        "key": "PPI_analysis_refactor::final_demand_sa",
+        "표시 이름": "PPI · 최종수요 (계절조정)",
+        "모듈": "PPI",
+        "대분류": "물가",
+        "데이터 타입": "수준",
+        "원본 ID": "final_demand_sa"
+      }
+    ],
+    "custom_labels": {},
+    "global_dtype_key": "raw_data",
+    "per_series_override": false,
+    "dtype_map": {
+      "PPI_analysis_refactor::final_demand_sa": "raw_data"
+    },
+    "series_type_map": {
+      "PPI · 최종수요 (계절조정)": "raw_data"
+    },
+    "chart_type": "multi_line",
+    "chart_type_label": "멀티 라인",
+    "chart_width_cm": 24.0,
+    "chart_height_cm": 12.0,
+    "single_axis_title": "",
+    "left_axis_title": "",
+    "right_axis_title": "",
+    "left_title_offset": 0.0,
+    "right_title_offset": 0.0,
+    "dual_axis_left": [],
+    "dual_axis_right": [],
+    "five_year_recent_years": null,
+    "active_series_keys": [
+      "PPI_analysis_refactor::final_demand_sa"
+    ],
+    "display_labels": [
+      "PPI · 최종수요 (계절조정)"
+    ],
+    "axis_label_default": "수준",
+    "generated_at": "2025-09-19T09:47:19",
+    "saved_at": "2025-09-19T09:47:19",
+    "name": "테스트2"
+  },
+  "PMI": {
+    "series_keys": [
+      "fed_pmi_refactor::philadelphia_manufacturing_general_activity",
+      "fed_pmi_refactor::new_york_manufacturing_general_business_conditions",
+      "fed_pmi_refactor::chicago_economic_conditions_activity_index",
+      "fed_pmi_refactor::dallas_manufacturing_general_business_activity",
+      "ism_pmi_refactor::pmi_pm"
+    ],
+    "series_labels": {
+      "fed_pmi_refactor::philadelphia_manufacturing_general_activity": "필라델피아 제조업 PMI",
+      "fed_pmi_refactor::new_york_manufacturing_general_business_conditions": "뉴욕 제조업 PMI",
+      "fed_pmi_refactor::chicago_economic_conditions_activity_index": "시카고 PMI",
+      "fed_pmi_refactor::dallas_manufacturing_general_business_activity": "댈러스 제조업 PMI",
+      "ism_pmi_refactor::pmi_pm": "ISM PMI (우)"
+    },
+    "series_info": [
+      {
+        "key": "fed_pmi_refactor::philadelphia_manufacturing_general_activity",
+        "표시 이름": "필라델피아 제조업 PMI",
+        "모듈": "연준 PMI",
+        "대분류": "생산·소비",
+        "데이터 타입": "수준",
+        "원본 ID": "philadelphia_manufacturing_general_activity"
+      },
+      {
+        "key": "fed_pmi_refactor::new_york_manufacturing_general_business_conditions",
+        "표시 이름": "뉴욕 제조업 PMI",
+        "모듈": "연준 PMI",
+        "대분류": "생산·소비",
+        "데이터 타입": "수준",
+        "원본 ID": "new_york_manufacturing_general_business_conditions"
+      },
+      {
+        "key": "fed_pmi_refactor::chicago_economic_conditions_activity_index",
+        "표시 이름": "시카고 PMI",
+        "모듈": "연준 PMI",
+        "대분류": "생산·소비",
+        "데이터 타입": "수준",
+        "원본 ID": "chicago_economic_conditions_activity_index"
+      },
+      {
+        "key": "fed_pmi_refactor::dallas_manufacturing_general_business_activity",
+        "표시 이름": "댈러스 제조업 PMI",
+        "모듈": "연준 PMI",
+        "대분류": "생산·소비",
+        "데이터 타입": "수준",
+        "원본 ID": "dallas_manufacturing_general_business_activity"
+      },
+      {
+        "key": "ism_pmi_refactor::pmi_pm",
+        "표시 이름": "ISM PMI (우)",
+        "모듈": "ISM PMI",
+        "대분류": "생산·소비",
+        "데이터 타입": "수준",
+        "원본 ID": "pmi_pm"
+      }
+    ],
+    "custom_labels": {
+      "fed_pmi_refactor::philadelphia_manufacturing_general_activity": "필라델피아 제조업 PMI",
+      "fed_pmi_refactor::new_york_manufacturing_general_business_conditions": "뉴욕 제조업 PMI",
+      "fed_pmi_refactor::chicago_economic_conditions_activity_index": "시카고 PMI",
+      "fed_pmi_refactor::dallas_manufacturing_general_business_activity": "댈러스 제조업 PMI",
+      "ism_pmi_refactor::pmi_pm": "ISM PMI (우)"
+    },
+    "global_dtype_key": "raw_data",
+    "per_series_override": false,
+    "dtype_map": {
+      "fed_pmi_refactor::philadelphia_manufacturing_general_activity": "raw_data",
+      "fed_pmi_refactor::new_york_manufacturing_general_business_conditions": "raw_data",
+      "fed_pmi_refactor::chicago_economic_conditions_activity_index": "raw_data",
+      "fed_pmi_refactor::dallas_manufacturing_general_business_activity": "raw_data",
+      "ism_pmi_refactor::pmi_pm": "raw_data"
+    },
+    "series_type_map": {
+      "필라델피아 제조업 PMI": "raw_data",
+      "뉴욕 제조업 PMI": "raw_data",
+      "시카고 PMI": "raw_data",
+      "댈러스 제조업 PMI": "raw_data",
+      "ISM PMI (우)": "raw_data"
+    },
+    "chart_type": "dual_axis",
+    "chart_type_label": "이중 축",
+    "chart_width_cm": 24.0,
+    "chart_height_cm": 12.0,
+    "single_axis_title": "",
+    "left_axis_title": "",
+    "right_axis_title": "",
+    "left_title_offset": 0.0,
+    "right_title_offset": 0.0,
+    "dual_axis_left": [
+      "필라델피아 제조업 PMI",
+      "뉴욕 제조업 PMI",
+      "댈러스 제조업 PMI",
+      "시카고 PMI"
+    ],
+    "dual_axis_right": [
+      "ISM PMI (우)"
+    ],
+    "five_year_recent_years": null,
+    "active_series_keys": [
+      "fed_pmi_refactor::philadelphia_manufacturing_general_activity",
+      "fed_pmi_refactor::new_york_manufacturing_general_business_conditions",
+      "fed_pmi_refactor::chicago_economic_conditions_activity_index",
+      "fed_pmi_refactor::dallas_manufacturing_general_business_activity",
+      "ism_pmi_refactor::pmi_pm"
+    ],
+    "display_labels": [
+      "필라델피아 제조업 PMI",
+      "뉴욕 제조업 PMI",
+      "시카고 PMI",
+      "댈러스 제조업 PMI",
+      "ISM PMI (우)"
+    ],
+    "axis_label_default": "수준",
+    "generated_at": "2025-09-19T10:53:01",
+    "saved_at": "2025-09-19T10:53:01",
+    "name": "PMI"
+  },
+  "물가": {
+    "series_keys": [
+      "CPI_analysis_refactor::headline",
+      "CPI_analysis_refactor::core",
+      "fed_pmi_refactor::philadelphia_manufacturing_prices_paid",
+      "fed_pmi_refactor::philadelphia_nonmanufacturing_prices_paid",
+      "fed_pmi_refactor::new_york_manufacturing_prices_paid",
+      "fed_pmi_refactor::dallas_manufacturing_prices_paid_raw_materials",
+      "fed_pmi_refactor::dallas_retail_input_prices",
+      "fed_pmi_refactor::new_york_services_prices_paid"
+    ],
+    "series_labels": {
+      "CPI_analysis_refactor::headline": "헤드라인 CPI (우)",
+      "CPI_analysis_refactor::core": "코어 CPI (우)",
+      "fed_pmi_refactor::philadelphia_manufacturing_prices_paid": "필라델피아 제조업 PMI 지불 가격",
+      "fed_pmi_refactor::philadelphia_nonmanufacturing_prices_paid": "필라델피아 비제조업 PMI 지불 가격",
+      "fed_pmi_refactor::new_york_manufacturing_prices_paid": "연준 제조업 PMI 지불 가격",
+      "fed_pmi_refactor::dallas_manufacturing_prices_paid_raw_materials": "댈러스 제조업 PMI 지불 가격",
+      "fed_pmi_refactor::dallas_retail_input_prices": "댈러스 소매업 PMI 투입 가격",
+      "fed_pmi_refactor::new_york_services_prices_paid": "뉴욕 서비스업 PMI 투입 가격"
+    },
+    "series_info": [
+      {
+        "key": "CPI_analysis_refactor::headline",
+        "표시 이름": "헤드라인 CPI (우)",
+        "모듈": "CPI",
+        "대분류": "물가",
+        "데이터 타입": "전년동월 대비 %",
+        "원본 ID": "headline"
+      },
+      {
+        "key": "CPI_analysis_refactor::core",
+        "표시 이름": "코어 CPI (우)",
+        "모듈": "CPI",
+        "대분류": "물가",
+        "데이터 타입": "전년동월 대비 %",
+        "원본 ID": "core"
+      },
+      {
+        "key": "fed_pmi_refactor::philadelphia_manufacturing_prices_paid",
+        "표시 이름": "필라델피아 제조업 PMI 지불 가격",
+        "모듈": "연준 PMI",
+        "대분류": "생산·소비",
+        "데이터 타입": "수준",
+        "원본 ID": "philadelphia_manufacturing_prices_paid"
+      },
+      {
+        "key": "fed_pmi_refactor::philadelphia_nonmanufacturing_prices_paid",
+        "표시 이름": "필라델피아 비제조업 PMI 지불 가격",
+        "모듈": "연준 PMI",
+        "대분류": "생산·소비",
+        "데이터 타입": "수준",
+        "원본 ID": "philadelphia_nonmanufacturing_prices_paid"
+      },
+      {
+        "key": "fed_pmi_refactor::new_york_manufacturing_prices_paid",
+        "표시 이름": "연준 제조업 PMI 지불 가격",
+        "모듈": "연준 PMI",
+        "대분류": "생산·소비",
+        "데이터 타입": "수준",
+        "원본 ID": "new_york_manufacturing_prices_paid"
+      },
+      {
+        "key": "fed_pmi_refactor::dallas_manufacturing_prices_paid_raw_materials",
+        "표시 이름": "댈러스 제조업 PMI 지불 가격",
+        "모듈": "연준 PMI",
+        "대분류": "생산·소비",
+        "데이터 타입": "수준",
+        "원본 ID": "dallas_manufacturing_prices_paid_raw_materials"
+      },
+      {
+        "key": "fed_pmi_refactor::dallas_retail_input_prices",
+        "표시 이름": "댈러스 소매업 PMI 투입 가격",
+        "모듈": "연준 PMI",
+        "대분류": "생산·소비",
+        "데이터 타입": "수준",
+        "원본 ID": "dallas_retail_input_prices"
+      },
+      {
+        "key": "fed_pmi_refactor::new_york_services_prices_paid",
+        "표시 이름": "뉴욕 서비스업 PMI 투입 가격",
+        "모듈": "연준 PMI",
+        "대분류": "생산·소비",
+        "데이터 타입": "수준",
+        "원본 ID": "new_york_services_prices_paid"
+      }
+    ],
+    "custom_labels": {
+      "CPI_analysis_refactor::headline": "헤드라인 CPI (우)",
+      "CPI_analysis_refactor::core": "코어 CPI (우)",
+      "fed_pmi_refactor::philadelphia_manufacturing_prices_paid": "필라델피아 제조업 PMI 지불 가격",
+      "fed_pmi_refactor::philadelphia_nonmanufacturing_prices_paid": "필라델피아 비제조업 PMI 지불 가격",
+      "fed_pmi_refactor::new_york_manufacturing_prices_paid": "연준 제조업 PMI 지불 가격",
+      "fed_pmi_refactor::dallas_manufacturing_prices_paid_raw_materials": "댈러스 제조업 PMI 지불 가격",
+      "fed_pmi_refactor::dallas_retail_input_prices": "댈러스 소매업 PMI 투입 가격",
+      "fed_pmi_refactor::new_york_services_prices_paid": "뉴욕 서비스업 PMI 투입 가격"
+    },
+    "global_dtype_key": "raw_data",
+    "per_series_override": true,
+    "dtype_map": {
+      "CPI_analysis_refactor::headline": "yoy_data",
+      "CPI_analysis_refactor::core": "yoy_data",
+      "fed_pmi_refactor::philadelphia_manufacturing_prices_paid": "raw_data",
+      "fed_pmi_refactor::philadelphia_nonmanufacturing_prices_paid": "raw_data",
+      "fed_pmi_refactor::new_york_manufacturing_prices_paid": "raw_data",
+      "fed_pmi_refactor::dallas_manufacturing_prices_paid_raw_materials": "raw_data",
+      "fed_pmi_refactor::dallas_retail_input_prices": "raw_data",
+      "fed_pmi_refactor::new_york_services_prices_paid": "raw_data"
+    },
+    "series_type_map": {
+      "헤드라인 CPI (우)": "yoy_data",
+      "코어 CPI (우)": "yoy_data",
+      "필라델피아 제조업 PMI 지불 가격": "raw_data",
+      "필라델피아 비제조업 PMI 지불 가격": "raw_data",
+      "연준 제조업 PMI 지불 가격": "raw_data",
+      "댈러스 제조업 PMI 지불 가격": "raw_data",
+      "댈러스 소매업 PMI 투입 가격": "raw_data",
+      "뉴욕 서비스업 PMI 투입 가격": "raw_data"
+    },
+    "chart_type": "dual_axis",
+    "chart_type_label": "이중 축",
+    "chart_width_cm": 24.0,
+    "chart_height_cm": 12.0,
+    "single_axis_title": "",
+    "left_axis_title": "pt",
+    "right_axis_title": "%",
+    "left_title_offset": 0.0,
+    "right_title_offset": 0.0,
+    "dual_axis_left": [
+      "헤드라인 CPI (우)",
+      "코어 CPI (우)",
+      "필라델피아 제조업 PMI 지불 가격",
+      "필라델피아 비제조업 PMI 지불 가격"
+    ],
+    "dual_axis_right": [
+      "연준 제조업 PMI 지불 가격",
+      "댈러스 제조업 PMI 지불 가격",
+      "댈러스 소매업 PMI 투입 가격",
+      "뉴욕 서비스업 PMI 투입 가격"
+    ],
+    "five_year_recent_years": null,
+    "active_series_keys": [
+      "CPI_analysis_refactor::headline",
+      "CPI_analysis_refactor::core",
+      "fed_pmi_refactor::philadelphia_manufacturing_prices_paid",
+      "fed_pmi_refactor::philadelphia_nonmanufacturing_prices_paid",
+      "fed_pmi_refactor::new_york_manufacturing_prices_paid",
+      "fed_pmi_refactor::dallas_manufacturing_prices_paid_raw_materials",
+      "fed_pmi_refactor::dallas_retail_input_prices",
+      "fed_pmi_refactor::new_york_services_prices_paid"
+    ],
+    "display_labels": [
+      "헤드라인 CPI (우)",
+      "코어 CPI (우)",
+      "필라델피아 제조업 PMI 지불 가격",
+      "필라델피아 비제조업 PMI 지불 가격",
+      "연준 제조업 PMI 지불 가격",
+      "댈러스 제조업 PMI 지불 가격",
+      "댈러스 소매업 PMI 투입 가격",
+      "뉴욕 서비스업 PMI 투입 가격"
+    ],
+    "axis_label_default": "%",
+    "generated_at": "2025-09-19T11:08:04",
+    "saved_at": "2025-09-19T11:08:04",
+    "name": "물가"
+  }
+}

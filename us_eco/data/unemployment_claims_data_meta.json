@@ -1,0 +1,19 @@
+{
+  "series": {
+    "ICSA": "Initial Claims (Seasonally Adjusted)",
+    "ICNSA": "Initial Claims (Not Seasonally Adjusted)",
+    "CCSA": "Continued Claims (Seasonally Adjusted)",
+    "CCNSA": "Continued Claims (Not Seasonally Adjusted)"
+  },
+  "source": "Federal Reserve Economic Data (FRED)",
+  "collection_date": "2025-08-12T13:54:46.958634",
+  "start_date": "2000-01-01",
+  "end_date": "2025-08-12",
+  "frequency": "Weekly (Thursday)",
+  "units": {
+    "ICSA": "Number of people",
+    "ICNSA": "Number of people",
+    "CCSA": "Number of people",
+    "CCNSA": "Number of people"
+  }
+}
