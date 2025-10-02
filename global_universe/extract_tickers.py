@@ -1,7 +1,12 @@
 import re
+from pathlib import Path
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
+SOURCE_FILE = ROOT_DIR / 'world_indices copy.py'
+TICKER_LIST_FILE = ROOT_DIR / 'ticker_list.txt'
 
 # 파일 읽기
-with open('/home/jyp0615/world_indices copy.py', 'r', encoding='utf-8') as f:
+with SOURCE_FILE.open('r', encoding='utf-8') as f:
     content = f.read()
 
 # 티커 패턴 추출 (index와 etf)
@@ -43,7 +48,7 @@ for i, ticker in enumerate(sorted_tickers, 1):
 print(f'\n총 {len(sorted_tickers)}개의 티커')
 
 # 티커를 파일에 저장
-with open('/home/jyp0615/ticker_list.txt', 'w') as f:
+with TICKER_LIST_FILE.open('w', encoding='utf-8') as f:
     for ticker in sorted_tickers:
         f.write(f'{ticker}\n')
 

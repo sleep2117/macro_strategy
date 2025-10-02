@@ -16,12 +16,38 @@ import requests
 import json
 import os
 import sys
+from pathlib import Path
 import warnings
 warnings.filterwarnings('ignore')
 
+# 프로젝트 경로 설정
+REPO_ROOT = Path(__file__).resolve().parents[1]
+US_ECO_ROOT = REPO_ROOT / "us_eco"
+DATA_DIR = US_ECO_ROOT / "data"
+EXPORT_ROOT = REPO_ROOT
+
 # KPDS 시각화 라이브러리 불러오기
-sys.path.append('/home/jyp0615')
+sys.path.append(str(REPO_ROOT))
 from kpds_fig_format_enhanced import *
+
+
+def ensure_directory(path: Path) -> Path:
+    """Ensure directory exists and return the path."""
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+ensure_directory(DATA_DIR)
+
+
+def data_path(*parts: str) -> Path:
+    """Return a path under the shared us_eco/data directory."""
+    return DATA_DIR.joinpath(*parts)
+
+
+def repo_path(*parts: str) -> Path:
+    """Return a path under the repository root."""
+    return EXPORT_ROOT.joinpath(*parts)
 
 # %%
 # === API 설정 클래스 ===
@@ -363,9 +389,10 @@ def get_fred_data(series_id, start_date='2020-01-01', end_date=None):
 
 def ensure_data_directory(csv_file_path):
     """데이터 디렉터리 생성 확인"""
-    data_dir = os.path.dirname(csv_file_path)
-    if not os.path.exists(data_dir):
-        os.makedirs(data_dir)
+    path_obj = Path(csv_file_path)
+    data_dir = path_obj.parent
+    if not data_dir.exists():
+        data_dir.mkdir(parents=True)
         print(f"📁 데이터 디렉터리 생성: {data_dir}")
 
 def save_data_to_csv(data_df, csv_file_path):
@@ -1375,18 +1402,22 @@ def export_economic_data(data_dict, series_list, data_type='mom', periods=None,
         series_str = '_'.join(available_cols[:3])  # 처음 3개 시리즈만 파일명에 포함
         if len(available_cols) > 3:
             series_str += f"_등{len(available_cols)}개"
-        
+
         period_str = ""
         if periods is not None:
             period_str = f"_{periods}개월"
         elif target_date:
             period_str = f"_{target_date}까지"
-        
+
+        export_dir = repo_path('us_eco', 'exports')
+        export_dir.mkdir(parents=True, exist_ok=True)
         if file_format == 'excel':
-            export_path = f"/home/jyp0615/us_eco/exports/{desc}_{series_str}{period_str}_{timestamp}.xlsx"
+            export_path = export_dir / f"{desc}_{series_str}{period_str}_{timestamp}.xlsx"
         else:
-            export_path = f"/home/jyp0615/us_eco/exports/{desc}_{series_str}{period_str}_{timestamp}.csv"
-    
+            export_path = export_dir / f"{desc}_{series_str}{period_str}_{timestamp}.csv"
+    else:
+        export_path = Path(export_path)
+
     # exports 디렉터리 생성
     ensure_data_directory(export_path)
     

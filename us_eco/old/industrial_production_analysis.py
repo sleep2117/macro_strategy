@@ -46,7 +46,7 @@ FRED_API_KEY = 'f4bd434811e42e42287a0e5ccf400fff'
 
 # KPDS 시각화 라이브러리 불러오기 (선택적)
 try:
-    sys.path.append('/home/jyp0615')
+    sys.path.append('/home/jyp0615/macro_strategy')
     from kpds_fig_format_enhanced import *
     KPDS_AVAILABLE = True
     print("✓ KPDS 시각화 포맷 로드됨")

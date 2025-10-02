@@ -101,7 +101,7 @@ print("✓ Retail Sales 데이터 구조 정의 완료")
 
 # %%
 # === 전역 변수 ===
-CSV_FILE_PATH = '/home/jyp0615/us_eco/data/retail_sales_data_complete.csv'
+CSV_FILE_PATH = data_path('retail_sales_data_complete.csv')
 RETAIL_SALES_DATA = {}
 
 # %%

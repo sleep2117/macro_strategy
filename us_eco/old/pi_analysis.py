@@ -30,7 +30,7 @@ except ImportError:
 FRED_API_KEY = 'f4bd434811e42e42287a0e5ccf400fff'  # https://fred.stlouisfed.org/docs/api/api_key.html 에서 발급
 
 # KPDS 시각화 라이브러리 불러오기 (필수)
-sys.path.append('/home/jyp0615')
+sys.path.append('/home/jyp0615/macro_strategy')
 from kpds_fig_format_enhanced import *
 
 print("✓ KPDS 시각화 포맷 로드됨")

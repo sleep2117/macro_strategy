@@ -274,7 +274,7 @@ GDP_KOREAN_NAMES = {
 
 # %%
 # === 전역 변수 ===
-CSV_FILE_PATH = '/home/jyp0615/us_eco/data/gdp_data.csv'
+CSV_FILE_PATH = data_path('gdp_data.csv')
 GDP_DATA = {}
 
 # %%

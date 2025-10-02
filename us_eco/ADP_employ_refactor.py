@@ -73,7 +73,7 @@ ADP_KOREAN_NAMES = {
 }
 
 # CSV 파일 경로
-CSV_FILE_PATH = '/home/jyp0615/us_eco/data/adp_employ_data_refactored.csv'
+CSV_FILE_PATH = data_path('adp_employ_data_refactored.csv')
 
 # 전역 데이터 저장소
 ADP_DATA = {}
@@ -520,7 +520,7 @@ print("   export_adp_data(['construction', 'financial'], 'raw', periods=24, file
 print("   # 특정 날짜까지만")
 print("   export_adp_data(['total'], 'yoy', target_date='2024-06-01')")
 print("   # 커스텀 경로 지정")
-print("   export_adp_data(['total'], 'mom', export_path='/home/jyp0615/adp_data.xlsx')")
+print("   export_adp_data(['total'], 'mom', export_path=repo_path('adp_data.xlsx'))")
 print()
 print("✅ plot_adp_series_advanced()는 어떤 시리즈든 원하는 형태로 시각화 가능!")
 print("✅ export_adp_data()는 시각화와 동일한 데이터를 엑셀/CSV로 export!")
@@ -558,4 +558,4 @@ plot_adp_series_advanced(['total', 'size_1_19'], 'multi_line', 'mom', target_dat
 plot_adp_series_advanced(['total', 'size_1_19'], 'horizontal_bar', 'mom_change', target_date='2024-06-01')
 
 # %%
-export_adp_data(['total', 'size_1_19'], 'mom', periods=24, export_path='/home/jyp0615/adp_data.xlsx')
+export_adp_data(['total', 'size_1_19'], 'mom', periods=24, export_path=repo_path('adp_data.xlsx'))

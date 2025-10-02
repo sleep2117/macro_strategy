@@ -10,6 +10,7 @@ import pandas as pd
 import numpy as np
 import datetime as dt
 import sys
+from pathlib import Path
 import warnings
 # dbnomics is optional; handle gracefully when unavailable
 try:
@@ -24,15 +25,11 @@ import json
 warnings.filterwarnings('ignore')
 
 # KPDS 시각화 라이브러리 불러오기 (필수)
-sys.path.append('/home/jyp0615')
+sys.path.append(str(Path(__file__).resolve().parents[1]))
 from kpds_fig_format_enhanced import *
 
 # 통합 유틸리티 함수 불러오기 (시각화 함수용)
-try:
-    from us_eco_utils import plot_economic_series, export_economic_data
-    print("✓ us_eco_utils 시각화 함수 로드됨")
-except ImportError:
-    print("⚠️ us_eco_utils 일부 함수 사용 불가 (dbnomics 전용 함수 사용)")
+from us_eco_utils import data_path, plot_economic_series, export_economic_data, repo_path
 
 print("✓ KPDS 시각화 포맷 로드됨")
 
@@ -115,7 +112,7 @@ ISM_CATEGORIES = {
 # %%
 # === 전역 변수 ===
 
-CSV_FILE_PATH = '/home/jyp0615/us_eco/data/ism_pmi_data_refactored.csv'
+CSV_FILE_PATH = data_path('ism_pmi_data_refactored.csv')
 ISM_DATA = {
     'raw_data': pd.DataFrame(),
     'mom_data': pd.DataFrame(),
@@ -448,14 +445,17 @@ def export_ism_data(series_list, data_type='raw', periods=None,
     # 파일 경로 설정
     if not export_path:
         timestamp = dt.datetime.now().strftime('%Y%m%d_%H%M%S')
+        export_dir = repo_path('us_eco', 'exports')
+        Path(export_dir).mkdir(parents=True, exist_ok=True)
         if file_format == 'excel':
-            export_path = f'/home/jyp0615/us_eco/exports/ism_pmi_{data_type}_{timestamp}.xlsx'
+            export_path = export_dir / f'ism_pmi_{data_type}_{timestamp}.xlsx'
         else:
-            export_path = f'/home/jyp0615/us_eco/exports/ism_pmi_{data_type}_{timestamp}.csv'
-    
+            export_path = export_dir / f'ism_pmi_{data_type}_{timestamp}.csv'
+
     try:
-        os.makedirs(os.path.dirname(export_path), exist_ok=True)
-        
+        export_path = Path(export_path)
+        export_path.parent.mkdir(parents=True, exist_ok=True)
+
         if file_format == 'excel':
             export_data.to_excel(export_path)
         else:

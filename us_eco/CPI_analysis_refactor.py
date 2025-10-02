@@ -41,7 +41,7 @@ CPI_KOREAN_NAMES = ALL_KOREAN_NAMES
 # === 전역 변수 ===
 
 # CSV 파일 경로
-CSV_FILE_PATH = '/home/jyp0615/us_eco/data/cpi_data.csv'
+CSV_FILE_PATH = data_path('cpi_data.csv')
 
 # 전역 데이터 저장소
 CPI_DATA = {}
@@ -1016,7 +1016,7 @@ print("   export_cpi_data(['headline'], 'raw', periods=24, file_format='csv')")
 print("   # 특정 날짜까지만")
 print("   export_cpi_data(['food', 'energy'], 'yoy', target_date='2024-06-01')")
 print("   # 커스텀 경로 지정")
-print("   export_cpi_data(['headline'], 'mom', export_path='/home/jyp0615/my_cpi_data.xlsx')")
+print("   export_cpi_data(['headline'], 'mom', export_path=repo_path('my_cpi_data.xlsx'))")
 print()
 print("5. 통합 분석:")
 print("   run_cpi_analysis()  # 전체 CPI 분석")

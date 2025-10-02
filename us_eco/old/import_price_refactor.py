@@ -65,7 +65,7 @@ IMPORT_CATEGORIES = {
 
 # %%
 # === 전역 변수 ===
-CSV_FILE_PATH = '/home/jyp0615/us_eco/data/import_prices_data.csv'
+CSV_FILE_PATH = data_path('import_prices_data.csv')
 IMPORT_DATA = {}
 
 # %%

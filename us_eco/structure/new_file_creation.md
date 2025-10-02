@@ -5,7 +5,7 @@
 리팩토링된 구조로 새로운 분석 파일을 자동 생성하는 가이드입니다.
 
 ### 📋 입력 요구사항:
-1. **시리즈 정보 파일**: `/home/jyp0615/us_eco/structure/[데이터명].md`
+1. **시리즈 정보 파일**: `/home/jyp0615/macro_strategy/us_eco/structure/[데이터명].md`
 2. **데이터 소스**: FRED, BLS, DBnomics 중 하나 명시
 3. **지표 특성**: 단위, 변화율 계산 방식, 허용 오차 등
 
@@ -157,7 +157,7 @@ middle_atl_sa   # Middle Atlantic Seasonally Adjusted
 ```python
 # %%
 # === 전역 변수 ===
-CSV_FILE_PATH = '/home/jyp0615/us_eco/data/[파일명]_data_refactored.csv'
+CSV_FILE_PATH = '/home/jyp0615/macro_strategy/us_eco/data/[파일명]_data_refactored.csv'
 [데이터명]_DATA = {}
 ```
 
@@ -450,7 +450,7 @@ print("✅ 모든 함수가 us_eco_utils의 통합 함수 사용!")
 ## 📝 파일명 규칙
 
 ### 생성할 파일명:
-- `/home/jyp0615/us_eco/[데이터명]_analysis_refactor.py`
+- `/home/jyp0615/macro_strategy/us_eco/[데이터명]_analysis_refactor.py`
 - 예: `fhfa_hpi_analysis_refactor.py`
 
 ### 변수명 규칙:
@@ -471,9 +471,9 @@ print("✅ 모든 함수가 us_eco_utils의 통합 함수 사용!")
 ✅ **강력한 시각화**: plot_xxx_series_advanced() 범용 함수  
 
 ### 💡 참고 완성 예시:
-- **완전 수정 완료**: `/home/jyp0615/us_eco/JOLTS_employ_refactor.py`
-- **완전 수정 완료**: `/home/jyp0615/us_eco/PPI_analysis_refactor.py`  
-- **완전 수정 완료**: `/home/jyp0615/us_eco/import_price_refactor.py`
-- **DBnomics 전용**: `/home/jyp0615/us_eco/ism_pmi_refactor.py`
+- **완전 수정 완료**: `/home/jyp0615/macro_strategy/us_eco/JOLTS_employ_refactor.py`
+- **완전 수정 완료**: `/home/jyp0615/macro_strategy/us_eco/PPI_analysis_refactor.py`  
+- **완전 수정 완료**: `/home/jyp0615/macro_strategy/us_eco/import_price_refactor.py`
+- **DBnomics 전용**: `/home/jyp0615/macro_strategy/us_eco/ism_pmi_refactor.py`
 
 이 프롬프트로 생성된 모든 파일은 일관된 구조와 강력한 기능을 제공합니다!

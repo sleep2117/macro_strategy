@@ -8,8 +8,23 @@ import warnings
 import os
 warnings.filterwarnings('ignore')
 
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+US_ECO_ROOT = REPO_ROOT / "us_eco"
+DATA_DIR = US_ECO_ROOT / "data"
+
+
+def repo_path(*parts: str) -> Path:
+    return REPO_ROOT.joinpath(*parts)
+
+
+def data_path(*parts: str) -> Path:
+    return DATA_DIR.joinpath(*parts)
+
+
 # KPDS 시각화 라이브러리 불러오기 (필수)
-sys.path.append('/home/jyp0615')
+sys.path.append('/home/jyp0615/macro_strategy')
 from kpds_fig_format_enhanced import *
 
 print("✓ KPDS 시각화 포맷 로드됨")
@@ -170,8 +185,23 @@ import os
 import json
 warnings.filterwarnings('ignore')
 
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+US_ECO_ROOT = REPO_ROOT / "us_eco"
+DATA_DIR = US_ECO_ROOT / "data"
+
+
+def repo_path(*parts: str) -> Path:
+    return REPO_ROOT.joinpath(*parts)
+
+
+def data_path(*parts: str) -> Path:
+    return DATA_DIR.joinpath(*parts)
+
+
 # 시각화 라이브러리 불러오기
-sys.path.append('/home/jyp0615')
+sys.path.append('/home/jyp0615/macro_strategy')
 from kpds_fig_format_enhanced import *
 
 # %%
@@ -243,7 +273,7 @@ ISM_DATA = {
 # %%
 # === 스마트 업데이트 및 CSV 관리 함수들 ===
 
-def save_ism_data_to_csv(file_path='/home/jyp0615/us_eco/ism_pmi_data.csv'):
+def save_ism_data_to_csv(file_path=repo_path('us_eco', 'ism_pmi_data.csv')):
     """
     현재 로드된 ISM PMI 데이터를 CSV 파일로 저장
     
@@ -288,7 +318,7 @@ def save_ism_data_to_csv(file_path='/home/jyp0615/us_eco/ism_pmi_data.csv'):
         print(f"❌ CSV 저장 실패: {e}")
         return False
 
-def load_ism_data_from_csv(file_path='/home/jyp0615/us_eco/ism_pmi_data.csv'):
+def load_ism_data_from_csv(file_path=repo_path('us_eco', 'ism_pmi_data.csv')):
     """
     CSV 파일에서 ISM PMI 데이터 로드
     
@@ -403,7 +433,7 @@ def calculate_diffusion_index(data):
 # %%
 # === Enhanced 데이터 로드 함수 ===
 
-def load_all_ism_data_enhanced(start_date='2020-01-01', force_reload=False, smart_update=True, csv_file='/home/jyp0615/us_eco/ism_pmi_data.csv'):
+def load_all_ism_data_enhanced(start_date='2020-01-01', force_reload=False, smart_update=True, csv_file=repo_path('us_eco', 'ism_pmi_data.csv')):
     """
     모든 ISM PMI 데이터 로드 (스마트 업데이트 지원)
     

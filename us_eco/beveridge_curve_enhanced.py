@@ -13,6 +13,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from datetime import datetime, timedelta
 import sys
+from pathlib import Path
 import warnings
 import os
 warnings.filterwarnings('ignore')
@@ -31,7 +32,7 @@ except ImportError:
 FRED_API_KEY = 'f4bd434811e42e42287a0e5ccf400fff'  # https://fred.stlouisfed.org/docs/api/api_key.html 에서 발급
 
 # KPDS 시각화 라이브러리 불러오기 (필수)
-sys.path.append('/home/jyp0615')
+sys.path.append(str(Path(__file__).resolve().parents[1]))
 try:
     from kpds_fig_format_enhanced import *
     print("✓ KPDS 시각화 포맷 로드됨")
@@ -39,6 +40,8 @@ try:
 except ImportError:
     print("⚠️ KPDS 시각화 포맷을 불러올 수 없습니다.")
     KPDS_AVAILABLE = False
+
+from us_eco_utils import data_path
 
 # %%
 # === 베버리지 커브 시리즈 정의 ===
@@ -62,7 +65,7 @@ SERIES_KOREAN_NAMES = {
 FRED_SESSION = None
 
 # CSV 파일 경로
-CSV_FILE_PATH = '/home/jyp0615/us_eco/data/beveridge_curve_data.csv'
+CSV_FILE_PATH = data_path('beveridge_curve_data.csv')
 
 # 전역 데이터 저장소
 BEVERIDGE_DATA = {

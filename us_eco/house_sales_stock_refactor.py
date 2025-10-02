@@ -316,7 +316,7 @@ HOUSE_SALES_STOCK_KOREAN_NAMES = {
 
 # %%
 # === 전역 변수 ===
-CSV_FILE_PATH = '/home/jyp0615/us_eco/data/house_sales_stock_data_refactored.csv'
+CSV_FILE_PATH = data_path('house_sales_stock_data_refactored.csv')
 HOUSE_SALES_STOCK_DATA = {
     'raw_data': pd.DataFrame(),          # 원본 데이터
     'mom_data': pd.DataFrame(),          # 전월대비 변화

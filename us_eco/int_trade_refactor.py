@@ -167,7 +167,7 @@ INT_TRADE_CATEGORIES = {
 
 # %%
 # === 전역 변수 ===
-CSV_FILE_PATH = '/home/jyp0615/us_eco/data/int_trade_data_refactored.csv'
+CSV_FILE_PATH = data_path('int_trade_data_refactored.csv')
 INT_TRADE_DATA = {}
 
 # %%

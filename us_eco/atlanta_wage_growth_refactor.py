@@ -221,7 +221,7 @@ ATLANTA_WAGE_GROWTH_CATEGORIES = {
 
 # %%
 # === 전역 변수 ===
-CSV_FILE_PATH = '/home/jyp0615/us_eco/data/atlanta_wage_growth_data_refactored.csv'
+CSV_FILE_PATH = data_path('atlanta_wage_growth_data_refactored.csv')
 ATLANTA_WAGE_GROWTH_DATA = {}
 
 # %%

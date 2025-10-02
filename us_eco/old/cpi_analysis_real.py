@@ -14,6 +14,21 @@ import sys
 import warnings
 warnings.filterwarnings('ignore')
 
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+US_ECO_ROOT = REPO_ROOT / "us_eco"
+DATA_DIR = US_ECO_ROOT / "data"
+
+
+def repo_path(*parts: str) -> Path:
+    return REPO_ROOT.joinpath(*parts)
+
+
+def data_path(*parts: str) -> Path:
+    return DATA_DIR.joinpath(*parts)
+
+
 # 필수 라이브러리들
 try:
     import requests
@@ -30,7 +45,7 @@ BLS_API_KEY3 = 'daf1ca7970b74e81b6a5c7a80a8b8a7f'
 CURRENT_API_KEY = BLS_API_KEY  # 현재 사용 중인 API 키
 
 # 시각화 라이브러리 불러오기
-sys.path.append('/home/jyp0615')
+sys.path.append('/home/jyp0615/macro_strategy')
 from kpds_fig_format_enhanced import *
 
 # %%
@@ -334,7 +349,7 @@ def calculate_mom_change(data):
 # %%
 # === CSV 저장/로드 함수들 ===
 
-def save_cpi_data_to_csv(file_path='/home/jyp0615/us_eco/cpi_data.csv'):
+def save_cpi_data_to_csv(file_path=repo_path('us_eco', 'cpi_data.csv')):
     """
     현재 로드된 CPI 데이터를 CSV 파일로 저장
     
@@ -380,7 +395,7 @@ def save_cpi_data_to_csv(file_path='/home/jyp0615/us_eco/cpi_data.csv'):
         print(f"❌ CSV 저장 실패: {e}")
         return False
 
-def load_cpi_data_from_csv(file_path='/home/jyp0615/us_eco/cpi_data.csv'):
+def load_cpi_data_from_csv(file_path=repo_path('us_eco', 'cpi_data.csv')):
     """
     CSV 파일에서 CPI 데이터 로드
     
@@ -678,7 +693,7 @@ def update_cpi_data_from_api(start_date=None, series_list=None, smart_update=Tru
 
 # === 메인 데이터 로드 함수 ===
 
-def load_all_cpi_data(start_date='2020-01-01', series_list=None, force_reload=False, csv_file='/home/jyp0615/us_eco/cpi_data.csv'):
+def load_all_cpi_data(start_date='2020-01-01', series_list=None, force_reload=False, csv_file=repo_path('us_eco', 'cpi_data.csv')):
     """
     CPI 데이터 로드 (CSV 우선, API 백업 방식)
     

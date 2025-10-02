@@ -214,7 +214,7 @@ print("✓ Durable Goods 데이터 구조 정의 완료")
 
 # %%
 # === 전역 변수 ===
-CSV_FILE_PATH = '/home/jyp0615/us_eco/data/durable_goods_data_refactored.csv'
+CSV_FILE_PATH = data_path('durable_goods_data_refactored.csv')
 DURABLE_GOODS_DATA = {}
 
 # %%

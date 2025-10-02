@@ -17,7 +17,7 @@ warnings.filterwarnings('ignore')
 from us_eco_utils import *
 
 # kpds 시각화 라이브러리 불러오기
-sys.path.append('/home/jyp0615')
+sys.path.append(str(REPO_ROOT))
 from kpds_fig_format_enhanced import *
 
 # %%
@@ -136,7 +136,7 @@ FED_BALANCE_CATEGORIES = {
 
 # %%
 # === 전역 변수 ===
-CSV_FILE_PATH = '/home/jyp0615/us_eco/data/fed_balance_sheet_data_refactored.csv'
+CSV_FILE_PATH = data_path('fed_balance_sheet_data_refactored.csv')
 FED_BALANCE_DATA = {}
 
 # %%

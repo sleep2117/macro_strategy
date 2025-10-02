@@ -15,6 +15,21 @@ import warnings
 import os
 warnings.filterwarnings('ignore')
 
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+US_ECO_ROOT = REPO_ROOT / "us_eco"
+DATA_DIR = US_ECO_ROOT / "data"
+
+
+def repo_path(*parts: str) -> Path:
+    return REPO_ROOT.joinpath(*parts)
+
+
+def data_path(*parts: str) -> Path:
+    return DATA_DIR.joinpath(*parts)
+
+
 # 필수 라이브러리들
 try:
     import requests
@@ -29,7 +44,7 @@ except ImportError:
 FRED_API_KEY = 'f4bd434811e42e42287a0e5ccf400fff'  # https://fred.stlouisfed.org/docs/api/api_key.html 에서 발급
 
 # KPDS 시각화 라이브러리 불러오기 (필수)
-sys.path.append('/home/jyp0615')
+sys.path.append('/home/jyp0615/macro_strategy')
 from kpds_fig_format_enhanced import *
 
 print("✓ KPDS 시각화 포맷 로드됨")
@@ -95,7 +110,7 @@ ADP_KOREAN_NAMES = {
 FRED_SESSION = None
 
 # CSV 파일 경로
-CSV_FILE_PATH = '/home/jyp0615/us_eco/data/adp_employ_data.csv'
+CSV_FILE_PATH = data_path('adp_employ_data.csv')
 
 # 전역 데이터 저장소
 ADP_DATA = {
@@ -1058,7 +1073,7 @@ print("   - 데이터 일치성 자동 확인 (허용 오차: 1,000천명)")
 print("   - CSV 기반 로컬 캐싱")
 print("   - 불필요한 API 호출 최소화")
 print()
-print("✅ 모든 시각화가 KPDS 포맷(/home/jyp0615/kpds_fig_format_enhanced.py)을 사용합니다.")
+print("✅ 모든 시각화가 KPDS 포맷(/home/jyp0615/macro_strategy/kpds_fig_format_enhanced.py)을 사용합니다.")
 
 # %%
 # 사용 가능한 시리즈 표시

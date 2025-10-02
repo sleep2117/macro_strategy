@@ -248,7 +248,7 @@ INDUSTRIAL_KOREAN_NAMES = {
 
 # %%
 # === 전역 변수 ===
-CSV_FILE_PATH = '/home/jyp0615/us_eco/data/industrial_production_data.csv'
+CSV_FILE_PATH = data_path('industrial_production_data.csv')
 INDUSTRIAL_PRODUCTION_DATA = {}
 
 # %%

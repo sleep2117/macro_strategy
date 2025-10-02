@@ -137,7 +137,7 @@ PCE_CATEGORIES = {
 
 # %%
 # === 전역 변수 ===
-CSV_FILE_PATH = '/home/jyp0615/us_eco/data/pce_data_refactored.csv'
+CSV_FILE_PATH = data_path('pce_data_refactored.csv')
 PCE_DATA = {}
 
 # %%

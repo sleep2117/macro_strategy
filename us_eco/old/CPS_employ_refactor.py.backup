@@ -470,7 +470,7 @@ CPS_CATEGORIES = {
 
 # %%
 # === 전역 변수 ===
-CSV_FILE_PATH = '/home/jyp0615/us_eco/data/cps_employ_data_refactored.csv'
+CSV_FILE_PATH = '/home/jyp0615/macro_strategy/us_eco/data/cps_employ_data_refactored.csv'
 CPS_DATA = {}
 
 # %%
@@ -586,7 +586,7 @@ def export_cps_data(series_list, data_type='mom', periods=None,
 # %%
 # === CSV 저장/로드 함수들 ===
 
-def save_cps_data_to_csv(file_path='/home/jyp0615/us_eco/cps_data.csv'):
+def save_cps_data_to_csv(file_path='/home/jyp0615/macro_strategy/us_eco/cps_data.csv'):
     """
     현재 로드된 CPS 데이터를 CSV 파일로 저장
     
@@ -632,7 +632,7 @@ def save_cps_data_to_csv(file_path='/home/jyp0615/us_eco/cps_data.csv'):
         print(f"❌ CSV 저장 실패: {e}")
         return False
 
-def load_cps_data_from_csv(file_path='/home/jyp0615/us_eco/cps_data.csv'):
+def load_cps_data_from_csv(file_path='/home/jyp0615/macro_strategy/us_eco/cps_data.csv'):
     """
     CSV 파일에서 CPS 데이터 로드
     
@@ -924,7 +924,7 @@ def update_cps_data_from_api(start_date=None, series_list=None, smart_update=Tru
 # %%
 # === 메인 데이터 로드 함수 ===
 
-def load_all_cps_data(start_date='2020-01-01', series_list=None, force_reload=False, csv_file='/home/jyp0615/us_eco/cps_data.csv'):
+def load_all_cps_data(start_date='2020-01-01', series_list=None, force_reload=False, csv_file='/home/jyp0615/macro_strategy/us_eco/cps_data.csv'):
     """
     CPS 데이터 로드 (CSV 우선, API 백업 방식)
     
@@ -1942,7 +1942,7 @@ def export_analysis_data(output_format='excel', filename=None):
     # 파일명 자동 생성
     if filename is None:
         timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f'/home/jyp0615/us_eco/cps_analysis_{timestamp}'
+        filename = f'/home/jyp0615/macro_strategy/us_eco/cps_analysis_{timestamp}'
     
     try:
         if output_format == 'excel':

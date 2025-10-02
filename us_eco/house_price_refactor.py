@@ -435,7 +435,7 @@ _normalize_house_price_korean_names()
 
 # %%
 # === 전역 변수 ===
-CSV_FILE_PATH = '/home/jyp0615/us_eco/data/house_price_data_refactored.csv'
+CSV_FILE_PATH = data_path('house_price_data_refactored.csv')
 HOUSE_PRICE_DATA = {
     'raw_data': pd.DataFrame(),          # 원본 데이터
     'mom_data': pd.DataFrame(),          # 전월대비 변화

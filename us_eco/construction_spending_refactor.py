@@ -152,7 +152,7 @@ CONSTRUCTION_SPENDING_CATEGORIES = {
 
 # %%
 # === 전역 변수 ===
-CSV_FILE_PATH = '/home/jyp0615/us_eco/data/construction_spending_data_refactored.csv'
+CSV_FILE_PATH = data_path('construction_spending_data_refactored.csv')
 CONSTRUCTION_SPENDING_DATA = {}
 
 # %%

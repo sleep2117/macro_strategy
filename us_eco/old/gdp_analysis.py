@@ -31,7 +31,7 @@ except ImportError:
 FRED_API_KEY = 'f4bd434811e42e42287a0e5ccf400fff'  # https://fred.stlouisfed.org/docs/api/api_key.html 에서 발급
 
 # KPDS 시각화 라이브러리 불러오기 (필수)
-sys.path.append('/home/jyp0615')
+sys.path.append('/home/jyp0615/macro_strategy')
 from kpds_fig_format_enhanced import *
 
 print("✓ KPDS 시각화 포맷 로드됨")
@@ -223,7 +223,7 @@ GDP_DATA = {
         'series_count': 0,
         'data_points': 0,
         'csv_updated': False,
-        'csv_file_path': '/home/jyp0615/us_eco/gdp_data.csv'
+        'csv_file_path': '/home/jyp0615/macro_strategy/us_eco/gdp_data.csv'
     }
 }
 
@@ -777,7 +777,7 @@ def load_all_gdp_data(start_date='2000-01-01', force_reload=False, smart_update=
         'series_count': len(change_data_dict) + len(contrib_data_dict),
         'data_points': len(GDP_DATA['change_data']),
         'csv_updated': True,
-        'csv_file_path': '/home/jyp0615/us_eco/gdp_data.csv'
+        'csv_file_path': '/home/jyp0615/macro_strategy/us_eco/gdp_data.csv'
     }
     
     print("\n✅ 데이터 로딩 완료!")
@@ -1700,10 +1700,10 @@ print("7. 트렌드 분석:")
 print("   analyze_gdp_trends()  # 상세 트렌드 분석")
 print()
 print("8. CSV 파일:")
-print("   - 자동 저장 위치: /home/jyp0615/us_eco/gdp_data.csv")
+print("   - 자동 저장 위치: /home/jyp0615/macro_strategy/us_eco/gdp_data.csv")
 print("   - 실행 시마다 자동 업데이트 (스마트 업데이트)")
 print()
-print("✅ 모든 시각화가 KPDS 포맷(/home/jyp0615/kpds_fig_format_enhanced.py)을 사용합니다.")
+print("✅ 모든 시각화가 KPDS 포맷(/home/jyp0615/macro_strategy/kpds_fig_format_enhanced.py)을 사용합니다.")
 
 # %%
 # 사용 가능한 시리즈 표시

@@ -64,7 +64,7 @@ api_config.BLS_API_KEY3 = '...'
 ```python
 # %%
 # === 전역 변수 ===
-CSV_FILE_PATH = '/home/jyp0615/us_eco/data/[파일명]_data_refactored.csv'
+CSV_FILE_PATH = '/home/jyp0615/macro_strategy/us_eco/data/[파일명]_data_refactored.csv'
 [데이터명]_DATA = {}
 ```
 
@@ -386,10 +386,10 @@ print("✅ 모든 함수가 us_eco_utils의 통합 함수 사용!")
 
 ### 💡 참고 파일:
 완벽한 리팩토링 예시는 다음 파일들을 참조:
-- **완전 수정 완료**: `/home/jyp0615/Macro-analysis/us_eco/JOLTS_employ_refactor.py`
-- **완전 수정 완료**: `/home/jyp0615/Macro-analysis/us_eco/PPI_analysis_refactor.py`
-- **완전 수정 완료**: `/home/jyp0615/Macro-analysis/us_eco/import_price_refactor.py`
-- **참고 (기본 구조)**: `/home/jyp0615/Macro-analysis/us_eco/ADP_employ_refactored.py`
+- **완전 수정 완료**: `/home/jyp0615/macro_strategy/Macro-analysis/us_eco/JOLTS_employ_refactor.py`
+- **완전 수정 완료**: `/home/jyp0615/macro_strategy/Macro-analysis/us_eco/PPI_analysis_refactor.py`
+- **완전 수정 완료**: `/home/jyp0615/macro_strategy/Macro-analysis/us_eco/import_price_refactor.py`
+- **참고 (기본 구조)**: `/home/jyp0615/macro_strategy/Macro-analysis/us_eco/ADP_employ_refactored.py`
 
 ### 🚨 시리즈 딕셔너리 구조 변경 필수!
 **기존 CSV 파일 삭제 후 재생성 필요**: 구 형태로 저장된 CSV는 새 구조와 호환되지 않음

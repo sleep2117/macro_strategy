@@ -243,7 +243,7 @@ NEW_RESIDENTIAL_CONSTRUCTION_CATEGORIES = {
 
 # %%
 # === 전역 변수 ===
-CSV_FILE_PATH = '/home/jyp0615/us_eco/data/new_residential_construction_data_refactored.csv'
+CSV_FILE_PATH = data_path('new_residential_construction_data_refactored.csv')
 NEW_RESIDENTIAL_CONSTRUCTION_DATA = {}
 
 # %%

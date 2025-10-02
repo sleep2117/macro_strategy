@@ -474,8 +474,8 @@ def build_fed_series_groups(enabled_banks=None):
 FRED_SESSION = None
 
 # CSV 파일 경로
-CSV_FILE_PATH = '/home/jyp0615/us_eco/data/fed_pmi_data.csv'
-META_FILE_PATH = '/home/jyp0615/us_eco/data/fed_pmi_meta.json'
+CSV_FILE_PATH = data_path('fed_pmi_data.csv')
+META_FILE_PATH = data_path('fed_pmi_meta.json')
 
 # 전역 데이터 저장소
 FED_PMI_DATA = {

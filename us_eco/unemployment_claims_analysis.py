@@ -26,10 +26,11 @@ warnings.filterwarnings('ignore')
 
 # KPDS 시각화 포맷 import
 import sys
-sys.path.append('/home/jyp0615')
+from pathlib import Path
+sys.path.append(str(Path(__file__).resolve().parents[1]))
 from kpds_fig_format_enhanced import *
 
-from us_eco_utils import load_economic_data
+from us_eco_utils import DATA_DIR, load_economic_data, data_path
 
 # FRED API 키 설정
 FRED_API_KEY = 'f4bd434811e42e42287a0e5ccf400fff'  # FRED API Key
@@ -40,7 +41,7 @@ print("미국 실업급여 신청 건수 데이터 분석 시작")
 print("=" * 60)
 
 # 통합 대시보드용 메타데이터
-CSV_FILE_PATH = '/home/jyp0615/us_eco/data/unemployment_claims_data.csv'
+CSV_FILE_PATH = data_path('unemployment_claims_data.csv')
 
 UNEMPLOYMENT_CLAIMS_SERIES = {
     'ICSA': 'ICSA',
@@ -221,7 +222,7 @@ def collect_fred_data():
 # 2. 데이터 저장 및 로드
 # =============================================================================
 
-def save_data(df, metadata, base_path="/home/jyp0615/us_eco/data"):
+def save_data(df, metadata, base_path=DATA_DIR):
     """수집된 데이터를 CSV와 JSON으로 저장"""
     
     try:
@@ -242,7 +243,7 @@ def save_data(df, metadata, base_path="/home/jyp0615/us_eco/data"):
         print(f"❌ 데이터 저장 중 오류: {e}")
         return False
 
-def load_data(base_path="/home/jyp0615/us_eco/data"):
+def load_data(base_path=DATA_DIR):
     """저장된 데이터를 로드"""
     
     try:
