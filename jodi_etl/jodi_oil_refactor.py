@@ -56,7 +56,11 @@ try:
         create_five_year_comparison_chart,
     )
 except ImportError:
-    sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'us_eco'))
+    base_path = Path(__file__).resolve().parent
+    repo_root = base_path.parent
+    project_root_parent = repo_root.parent
+
+    sys.path.append(str(repo_root / "us_eco"))
     from us_eco_utils import (
         calculate_mom_percent,
         calculate_mom_change,
@@ -65,7 +69,7 @@ except ImportError:
         plot_economic_series,
         export_economic_data,
     )
-    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+    sys.path.append(str(project_root_parent))
     from macro_strategy.kpds_fig_format_enhanced import (
         get_kpds_color,
         format_date_ticks,

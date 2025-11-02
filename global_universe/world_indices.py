@@ -1190,6 +1190,19 @@ def _fetch_history(symbol: str, start: datetime | None = None, end: datetime | N
                 hist.columns = cols
                 keep = [c for c in ["Open","High","Low","Close","Adj Close","Volume"] if c in hist.columns]
                 hist = hist[keep]
+                if isinstance(hist.index, pd.DatetimeIndex):
+                    hist = hist.copy()
+                    idx = hist.index
+                    try:
+                        if idx.tz is not None:
+                            hist.index = idx.tz_convert(None)
+                    except Exception:
+                        try:
+                            hist.index = idx.tz_localize(None)
+                        except Exception:
+                            pass
+                    hist.index.name = "Date"
+                hist = hist.sort_index()
             return hist
         except Exception as e:
             last_err = e
