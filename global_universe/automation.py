@@ -32,6 +32,10 @@ def ensure_dependencies() -> list[str]:
     """Return list of missing dependencies required for full updates."""
     missing: list[str] = []
     try:
+        import pkg_resources  # noqa: F401
+    except ImportError:
+        missing.append("setuptools (pkg_resources)")
+    try:
         import pykrx  # noqa: F401
     except ImportError:
         missing.append("pykrx")
