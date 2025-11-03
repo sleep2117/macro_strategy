@@ -22,6 +22,6 @@ jobs:
           pip install setuptools
           pip install -r requirements.txt
 
-      - name: Run smoke automation
+      - name: Run full verification (lightweight)
         run: |
-          python -m global_universe.automation --mode smoke --no-sanitize --skip-krx --symbols 2 --lookback 1 --pause 0.05
+          python -m global_universe.automation --mode full --no-sanitize --skip-smoke --lookback 1 --pause 0.1 --valuation-pause 0.1
