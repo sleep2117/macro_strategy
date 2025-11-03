@@ -29,7 +29,7 @@ jobs:
           PRICE_PAUSE: "0.3"
           PRICE_LOOKBACK: "7"
         run: |
-          python -m global_universe.automation --mode full
+          python -m global_universe.automation --mode full --no-sanitize --skip-smoke --lookback 3 --pause 0.15 --valuation-pause 0.15
 
       - name: Commit and push changes
         run: |

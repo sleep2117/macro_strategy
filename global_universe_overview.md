@@ -87,8 +87,9 @@
 - Dependencies are tracked in the new root `requirements.txt` (pandas, numpy, yfinance, requests, pykrx, matplotlib, sdmxthon).
 - `.github/workflows/daily-update.yml` runs daily at 06:30 KST (21:30 UTC) and on manual dispatch:
   1. Checks out the repo and installs requirements.
-  2. Calls `python -m global_universe.automation --mode full`.
+  2. Calls `python -m global_universe.automation --mode full --no-sanitize --skip-smoke --lookback 3 --pause 0.15 --valuation-pause 0.15` to speed up the daily run while still updating prices/valuations/KRX.
   3. Commits & pushes any data changes using the default `GITHUB_TOKEN`.
+- `.github/workflows/smoke-check.yml` is a manual workflow that re-enables sanitization and performs a lightweight full run (lookback 1, lower pauses). Trigger it whenever you need to clean CSVs and confirm the pipeline after changes; locally 동일하게 실행하려면 `python -m global_universe.automation --mode full --skip-smoke --lookback 1 --pause 0.1 --valuation-pause 0.1` 를 사용하면 됩니다.
 - The automation script will exit non-zero if dependency checks fail or if summary files report errors; the workflow therefore halts on issues, keeping the scheduled updates reliable.
 - When extending the pipeline (e.g., adding new dependencies or external APIs), update `requirements.txt` and rerun the automation script locally to ensure the action remains in sync.
 

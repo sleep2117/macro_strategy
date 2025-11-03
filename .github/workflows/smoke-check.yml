@@ -22,6 +22,6 @@ jobs:
           pip install setuptools
           pip install -r requirements.txt
 
-      - name: Run full verification (lightweight)
+      - name: Run full verification (with sanitization)
         run: |
-          python -m global_universe.automation --mode full --no-sanitize --skip-smoke --lookback 1 --pause 0.1 --valuation-pause 0.1
+          python -m global_universe.automation --mode full --skip-smoke --lookback 1 --pause 0.1 --valuation-pause 0.1
