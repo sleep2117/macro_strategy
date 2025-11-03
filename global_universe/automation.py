@@ -23,7 +23,7 @@ from . import world_indices as wi
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 
-PRICE_OK_STATUSES = {"ok", "skip", "noop"}
+PRICE_OK_STATUSES = {"ok", "no_change", "skip", "noop"}
 VALUATION_OK_STATUSES = {"ok", "no_data", "no_change", "noop"}
 KRX_OK_STATUSES = {"ok"}
 
