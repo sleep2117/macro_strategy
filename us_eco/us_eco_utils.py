@@ -31,6 +31,19 @@ sys.path.append(str(REPO_ROOT))
 from kpds_fig_format_enhanced import *
 
 
+def get_kpds_colors(count):
+    """
+    KPDS 색상을 count개 만큼 리스트로 반환
+    
+    Args:
+        count: 필요한 색상 개수
+    
+    Returns:
+        list: KPDS 색상 리스트
+    """
+    return [get_kpds_color(i) for i in range(count)]
+
+
 def ensure_directory(path: Path) -> Path:
     """Ensure directory exists and return the path."""
     path.mkdir(parents=True, exist_ok=True)

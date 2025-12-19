@@ -129,81 +129,15 @@
       "fed_pmi_refactor::new_york_services_prices_paid"
     ],
     "series_labels": {
-      "CPI_analysis_refactor::headline": "헤드라인 CPI (우)",
-      "CPI_analysis_refactor::core": "코어 CPI (우)",
-      "fed_pmi_refactor::philadelphia_manufacturing_prices_paid": "필라델피아 제조업 PMI 지불 가격",
-      "fed_pmi_refactor::philadelphia_nonmanufacturing_prices_paid": "필라델피아 비제조업 PMI 지불 가격",
-      "fed_pmi_refactor::new_york_manufacturing_prices_paid": "연준 제조업 PMI 지불 가격",
-      "fed_pmi_refactor::dallas_manufacturing_prices_paid_raw_materials": "댈러스 제조업 PMI 지불 가격",
-      "fed_pmi_refactor::dallas_retail_input_prices": "댈러스 소매업 PMI 투입 가격",
-      "fed_pmi_refactor::new_york_services_prices_paid": "뉴욕 서비스업 PMI 투입 가격"
+      "CPI_analysis_refactor::headline": "CPI - 전체 품목 (헤드라인 CPI)",
+      "CPI_analysis_refactor::core": "CPI - 식품·에너지 제외 (코어 CPI)",
+      "fed_pmi_refactor::philadelphia_manufacturing_prices_paid": "Fed PMI - 필라델피아 연준 제조업 · 지불 가격",
+      "fed_pmi_refactor::philadelphia_nonmanufacturing_prices_paid": "Fed PMI - 필라델피아 연준 비제조업 · 지불 가격",
+      "fed_pmi_refactor::new_york_manufacturing_prices_paid": "Fed PMI - 뉴욕 연준 제조업 · 지불 가격",
+      "fed_pmi_refactor::dallas_manufacturing_prices_paid_raw_materials": "Fed PMI - 댈러스 연준 제조업 · 원자재 지불 가격",
+      "fed_pmi_refactor::dallas_retail_input_prices": "Fed PMI - 댈러스 연준 소매업 · 투입 가격",
+      "fed_pmi_refactor::new_york_services_prices_paid": "Fed PMI - 뉴욕 연준 서비스업 · 지불 가격"
     },
-    "series_info": [
-      {
-        "key": "CPI_analysis_refactor::headline",
-        "표시 이름": "헤드라인 CPI (우)",
-        "모듈": "CPI",
-        "대분류": "물가",
-        "데이터 타입": "전년동월 대비 %",
-        "원본 ID": "headline"
-      },
-      {
-        "key": "CPI_analysis_refactor::core",
-        "표시 이름": "코어 CPI (우)",
-        "모듈": "CPI",
-        "대분류": "물가",
-        "데이터 타입": "전년동월 대비 %",
-        "원본 ID": "core"
-      },
-      {
-        "key": "fed_pmi_refactor::philadelphia_manufacturing_prices_paid",
-        "표시 이름": "필라델피아 제조업 PMI 지불 가격",
-        "모듈": "연준 PMI",
-        "대분류": "생산·소비",
-        "데이터 타입": "수준",
-        "원본 ID": "philadelphia_manufacturing_prices_paid"
-      },
-      {
-        "key": "fed_pmi_refactor::philadelphia_nonmanufacturing_prices_paid",
-        "표시 이름": "필라델피아 비제조업 PMI 지불 가격",
-        "모듈": "연준 PMI",
-        "대분류": "생산·소비",
-        "데이터 타입": "수준",
-        "원본 ID": "philadelphia_nonmanufacturing_prices_paid"
-      },
-      {
-        "key": "fed_pmi_refactor::new_york_manufacturing_prices_paid",
-        "표시 이름": "연준 제조업 PMI 지불 가격",
-        "모듈": "연준 PMI",
-        "대분류": "생산·소비",
-        "데이터 타입": "수준",
-        "원본 ID": "new_york_manufacturing_prices_paid"
-      },
-      {
-        "key": "fed_pmi_refactor::dallas_manufacturing_prices_paid_raw_materials",
-        "표시 이름": "댈러스 제조업 PMI 지불 가격",
-        "모듈": "연준 PMI",
-        "대분류": "생산·소비",
-        "데이터 타입": "수준",
-        "원본 ID": "dallas_manufacturing_prices_paid_raw_materials"
-      },
-      {
-        "key": "fed_pmi_refactor::dallas_retail_input_prices",
-        "표시 이름": "댈러스 소매업 PMI 투입 가격",
-        "모듈": "연준 PMI",
-        "대분류": "생산·소비",
-        "데이터 타입": "수준",
-        "원본 ID": "dallas_retail_input_prices"
-      },
-      {
-        "key": "fed_pmi_refactor::new_york_services_prices_paid",
-        "표시 이름": "뉴욕 서비스업 PMI 투입 가격",
-        "모듈": "연준 PMI",
-        "대분류": "생산·소비",
-        "데이터 타입": "수준",
-        "원본 ID": "new_york_services_prices_paid"
-      }
-    ],
     "custom_labels": {
       "CPI_analysis_refactor::headline": "헤드라인 CPI (우)",
       "CPI_analysis_refactor::core": "코어 CPI (우)",
@@ -226,36 +160,26 @@
       "fed_pmi_refactor::dallas_retail_input_prices": "raw_data",
       "fed_pmi_refactor::new_york_services_prices_paid": "raw_data"
     },
-    "series_type_map": {
-      "헤드라인 CPI (우)": "yoy_data",
-      "코어 CPI (우)": "yoy_data",
-      "필라델피아 제조업 PMI 지불 가격": "raw_data",
-      "필라델피아 비제조업 PMI 지불 가격": "raw_data",
-      "연준 제조업 PMI 지불 가격": "raw_data",
-      "댈러스 제조업 PMI 지불 가격": "raw_data",
-      "댈러스 소매업 PMI 투입 가격": "raw_data",
-      "뉴욕 서비스업 PMI 투입 가격": "raw_data"
-    },
     "chart_type": "dual_axis",
-    "chart_type_label": "이중 축",
-    "chart_width_cm": 24.0,
+    "chart_type_label": "Dual axis",
+    "chart_width_cm": 19.0,
     "chart_height_cm": 12.0,
     "single_axis_title": "",
     "left_axis_title": "pt",
     "right_axis_title": "%",
-    "left_title_offset": 0.0,
+    "left_title_offset": 0.06,
     "right_title_offset": 0.0,
     "dual_axis_left": [
-      "헤드라인 CPI (우)",
-      "코어 CPI (우)",
       "필라델피아 제조업 PMI 지불 가격",
-      "필라델피아 비제조업 PMI 지불 가격"
-    ],
-    "dual_axis_right": [
+      "필라델피아 비제조업 PMI 지불 가격",
       "연준 제조업 PMI 지불 가격",
       "댈러스 제조업 PMI 지불 가격",
       "댈러스 소매업 PMI 투입 가격",
       "뉴욕 서비스업 PMI 투입 가격"
+    ],
+    "dual_axis_right": [
+      "헤드라인 CPI (우)",
+      "코어 CPI (우)"
     ],
     "five_year_recent_years": null,
     "active_series_keys": [
@@ -279,8 +203,15 @@
       "뉴욕 서비스업 PMI 투입 가격"
     ],
     "axis_label_default": "%",
-    "generated_at": "2025-09-19T11:08:04",
-    "saved_at": "2025-09-19T11:08:04",
+    "frequency_option": "original",
+    "single_axis_manual_range": false,
+    "left_axis_manual_range": false,
+    "right_axis_manual_range": false,
+    "single_axis_range": null,
+    "left_axis_range": null,
+    "right_axis_range": null,
+    "generated_at": "2025-12-19T16:37:11",
+    "saved_at": "2025-12-19T16:37:11",
     "name": "물가"
   },
   "ADP vs BLS 고용": {

@@ -33,9 +33,6 @@ jobs:
     concurrency:
       group: data-update
       cancel-in-progress: false
-    defaults:
-      run:
-        working-directory: macro_strategy
     env:
       BLS_API_KEY_1: ${{ secrets.BLS_API_KEY_1 }}
       BLS_API_KEY_2: ${{ secrets.BLS_API_KEY_2 }}
