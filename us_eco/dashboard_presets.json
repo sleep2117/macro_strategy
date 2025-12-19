@@ -1,116 +1,4 @@
 {
-  "테스트": {
-    "series_keys": [
-      "CPI_analysis_refactor::headline",
-      "CPI_analysis_refactor::core"
-    ],
-    "series_labels": {
-      "CPI_analysis_refactor::headline": "CPI · 전체 품목 (헤드라인 CPI)",
-      "CPI_analysis_refactor::core": "CPI · 식품·에너지 제외 (코어 CPI)"
-    },
-    "series_info": [
-      {
-        "key": "CPI_analysis_refactor::headline",
-        "표시 이름": "CPI · 전체 품목 (헤드라인 CPI)",
-        "모듈": "CPI",
-        "대분류": "물가",
-        "데이터 타입": "수준",
-        "원본 ID": "headline"
-      },
-      {
-        "key": "CPI_analysis_refactor::core",
-        "표시 이름": "CPI · 식품·에너지 제외 (코어 CPI)",
-        "모듈": "CPI",
-        "대분류": "물가",
-        "데이터 타입": "수준",
-        "원본 ID": "core"
-      }
-    ],
-    "custom_labels": {},
-    "global_dtype_key": "raw_data",
-    "per_series_override": false,
-    "dtype_map": {
-      "CPI_analysis_refactor::headline": "raw_data",
-      "CPI_analysis_refactor::core": "raw_data"
-    },
-    "series_type_map": {
-      "CPI · 전체 품목 (헤드라인 CPI)": "raw_data",
-      "CPI · 식품·에너지 제외 (코어 CPI)": "raw_data"
-    },
-    "chart_type": "multi_line",
-    "chart_type_label": "멀티 라인",
-    "chart_width_cm": 24.0,
-    "chart_height_cm": 12.0,
-    "single_axis_title": "",
-    "left_axis_title": "",
-    "right_axis_title": "",
-    "left_title_offset": 0.0,
-    "right_title_offset": 0.0,
-    "dual_axis_left": [],
-    "dual_axis_right": [],
-    "five_year_recent_years": null,
-    "active_series_keys": [
-      "CPI_analysis_refactor::headline",
-      "CPI_analysis_refactor::core"
-    ],
-    "display_labels": [
-      "CPI · 전체 품목 (헤드라인 CPI)",
-      "CPI · 식품·에너지 제외 (코어 CPI)"
-    ],
-    "axis_label_default": "수준",
-    "generated_at": "2025-09-19T09:43:37",
-    "saved_at": "2025-09-19T09:43:37",
-    "name": "테스트"
-  },
-  "테스트2": {
-    "series_keys": [
-      "PPI_analysis_refactor::final_demand_sa"
-    ],
-    "series_labels": {
-      "PPI_analysis_refactor::final_demand_sa": "PPI · 최종수요 (계절조정)"
-    },
-    "series_info": [
-      {
-        "key": "PPI_analysis_refactor::final_demand_sa",
-        "표시 이름": "PPI · 최종수요 (계절조정)",
-        "모듈": "PPI",
-        "대분류": "물가",
-        "데이터 타입": "수준",
-        "원본 ID": "final_demand_sa"
-      }
-    ],
-    "custom_labels": {},
-    "global_dtype_key": "raw_data",
-    "per_series_override": false,
-    "dtype_map": {
-      "PPI_analysis_refactor::final_demand_sa": "raw_data"
-    },
-    "series_type_map": {
-      "PPI · 최종수요 (계절조정)": "raw_data"
-    },
-    "chart_type": "multi_line",
-    "chart_type_label": "멀티 라인",
-    "chart_width_cm": 24.0,
-    "chart_height_cm": 12.0,
-    "single_axis_title": "",
-    "left_axis_title": "",
-    "right_axis_title": "",
-    "left_title_offset": 0.0,
-    "right_title_offset": 0.0,
-    "dual_axis_left": [],
-    "dual_axis_right": [],
-    "five_year_recent_years": null,
-    "active_series_keys": [
-      "PPI_analysis_refactor::final_demand_sa"
-    ],
-    "display_labels": [
-      "PPI · 최종수요 (계절조정)"
-    ],
-    "axis_label_default": "수준",
-    "generated_at": "2025-09-19T09:47:19",
-    "saved_at": "2025-09-19T09:47:19",
-    "name": "테스트2"
-  },
   "PMI": {
     "series_keys": [
       "fed_pmi_refactor::philadelphia_manufacturing_general_activity",
@@ -394,5 +282,85 @@
     "generated_at": "2025-09-19T11:08:04",
     "saved_at": "2025-09-19T11:08:04",
     "name": "물가"
+  },
+  "ADP vs BLS 고용": {
+    "series_keys": [
+      "ADP_employ_refactor::total",
+      "CES_employ_refactor::nonfarm_total"
+    ],
+    "series_labels": {
+      "ADP_employ_refactor::total": "ADP 고용 · 전체 민간 고용",
+      "CES_employ_refactor::nonfarm_total": "CES 고용 · 전체 비농업 고용"
+    },
+    "series_info": [
+      {
+        "key": "ADP_employ_refactor::total",
+        "표시 이름": "ADP 고용 · 전체 민간 고용",
+        "모듈": "ADP 고용",
+        "대분류": "고용",
+        "데이터 타입": "전월 대비 변화량",
+        "원본 ID": "total"
+      },
+      {
+        "key": "CES_employ_refactor::nonfarm_total",
+        "표시 이름": "CES 고용 · 전체 비농업 고용",
+        "모듈": "CES 고용",
+        "대분류": "고용",
+        "데이터 타입": "전월 대비 변화량",
+        "원본 ID": "nonfarm_total"
+      }
+    ],
+    "custom_labels": {},
+    "global_dtype_key": "mom_change",
+    "per_series_override": false,
+    "dtype_map": {
+      "ADP_employ_refactor::total": "mom_change",
+      "CES_employ_refactor::nonfarm_total": "mom_change"
+    },
+    "series_type_map": {
+      "ADP 고용 · 전체 민간 고용": "mom_change",
+      "CES 고용 · 전체 비농업 고용": "mom_change"
+    },
+    "chart_type": "dual_axis",
+    "chart_type_label": "이중 축",
+    "chart_width_cm": 19.5,
+    "chart_height_cm": 10.0,
+    "single_axis_title": "",
+    "left_axis_title": "건",
+    "right_axis_title": "천 건",
+    "left_title_offset": -0.03,
+    "right_title_offset": 0.05,
+    "dual_axis_left": [
+      "ADP 고용 · 전체 민간 고용"
+    ],
+    "dual_axis_right": [
+      "CES 고용 · 전체 비농업 고용"
+    ],
+    "five_year_recent_years": null,
+    "active_series_keys": [
+      "ADP_employ_refactor::total",
+      "CES_employ_refactor::nonfarm_total"
+    ],
+    "display_labels": [
+      "ADP 고용 · 전체 민간 고용",
+      "CES 고용 · 전체 비농업 고용"
+    ],
+    "axis_label_default": "전월 대비 변화량",
+    "single_axis_manual_range": false,
+    "single_axis_range": null,
+    "left_axis_manual_range": true,
+    "left_axis_range": [
+      -100000.0,
+      400000.0
+    ],
+    "right_axis_manual_range": true,
+    "right_axis_range": [
+      -100.0,
+      500.0
+    ],
+    "frequency_option": "원본 유지",
+    "generated_at": "2025-11-14T16:47:38",
+    "saved_at": "2025-11-14T16:47:38",
+    "name": "ADP vs BLS 고용"
   }
 }

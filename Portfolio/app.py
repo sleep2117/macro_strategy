@@ -9,7 +9,218 @@ import plotly.graph_objects as go
 import plotly.express as px
 import data_loader
 import portfolio_analyzer
-import momentum_calculator
+import yfinance as yf
+
+def format_won(value) -> str:
+    """Format currency as KRW."""
+    if value is None or pd.isna(value):
+        return "-"
+    return f"₩{value:,.0f}"
+
+
+def format_pct(value, digits: int = 2) -> str:
+    """Format percentage with fallback."""
+    if value is None or pd.isna(value):
+        return "-"
+    return f"{value:.{digits}f}%"
+
+
+def classify_asset_type(asset_text: str) -> str:
+    """Roughly bucket holdings into Stock/Bond/Cash/Other using 상품종류 text."""
+    text = str(asset_text).lower()
+    if any(keyword in text for keyword in ["주식", "stock", "etf", "equity", "지수"]):
+        return "Stock"
+    if any(keyword in text for keyword in ["채", "bond"]):
+        return "Bond"
+    if any(keyword in text for keyword in ["rp", "현금", "cash", "머니", "mmf"]):
+        return "Cash"
+    return "Other"
+
+
+def get_value_column(df: pd.DataFrame) -> str:
+    """Best-effort detection of 평가금액 column name."""
+    for candidate in ["평가금액", "평가 금액", "평가가액", "평가금액(원)"]:
+        if candidate in df.columns:
+            return candidate
+    # Fallback: first numeric column
+    numeric_cols = [c for c in df.columns if pd.api.types.is_numeric_dtype(df[c])]
+    return numeric_cols[0] if numeric_cols else df.columns[0]
+
+
+def get_asset_type_column(df: pd.DataFrame) -> str:
+    """Pick the column that represents asset type."""
+    for candidate in ['상품유형', '상품종류', '상품구분', '자산군']:
+        if candidate in df.columns:
+            return candidate
+    return None
+
+
+def map_holdings_to_targets(latest_holdings: pd.DataFrame,
+                            targets: list,
+                            ticker_map: dict) -> pd.Series:
+    """
+    Map holdings rows to target buckets using 종목명 and ticker hints.
+
+    Returns:
+        Series with index = bucket name and values = summed 평가금액
+    """
+    if latest_holdings.empty:
+        return pd.Series(dtype=float)
+
+    value_col = get_value_column(latest_holdings)
+    name_col = '종목명' if '종목명' in latest_holdings.columns else latest_holdings.columns[0]
+
+    def match_bucket(name: str) -> str:
+        cleaned = str(name).upper().replace(" ", "")
+        for target in targets:
+            target_key = str(target).upper().replace(" ", "")
+            ticker_value = str(ticker_map.get(target, "")).upper().replace(".", "")
+            if target_key and target_key in cleaned:
+                return target
+            if ticker_value and ticker_value in cleaned:
+                return target
+        return "Unmapped"
+
+    working = latest_holdings.copy()
+    working['allocation_bucket'] = working[name_col].apply(match_bucket)
+
+    grouped = working.groupby('allocation_bucket')[value_col].sum()
+    return grouped
+
+# -------------------------
+# Core/Satellite Allocation
+# -------------------------
+
+# yfinance ticker mapping
+CORE_TICKERS = {
+    "SPY": "SPY",           # S&P500
+    "K51": "069500.KS",     # KOSPI200 ETF
+    "416090": "416090.KS",  # ACE 중국과창판STAR
+}
+
+SATELLITE_TICKERS = {
+    "FRO": "FRO",           # Frontline
+    "AR": "AR",             # Antero Resources
+    "REMX": "REMX",         # 희토류 ETF
+    "HG1": "HG=F",          # 구리 선물
+    "URANIUM": "URA",       # 우라늄 ETF
+    "GC1": "GC=F",          # 금 선물
+}
+
+BOND_TICKERS = {
+    "TLT": "TLT",           # 미국채 20년
+}
+
+MOMENTUM_LOOKBACKS = (63, 126, 252)  # 약 3/6/12개월 거래일
+DEFAULT_POWER = 2.0  # 3개월 수익률 기준 제곱
+
+
+@st.cache_data(show_spinner=False)
+def fetch_prices(ticker_map: dict, period: str = "400d") -> pd.DataFrame:
+    """Download adjusted closes from yfinance."""
+    tickers = list(ticker_map.values())
+    if not tickers:
+        return pd.DataFrame()
+
+    data = yf.download(
+        tickers,
+        period=period,
+        progress=False,
+        group_by="ticker",
+        auto_adjust=False,
+    )
+
+    closes = {}
+    for logical, yft in ticker_map.items():
+        try:
+            if isinstance(data.columns, pd.MultiIndex):
+                closes[logical] = data[yft]["Adj Close"].dropna()
+            else:
+                closes[logical] = data["Adj Close"].dropna()
+        except KeyError:
+            closes[logical] = pd.Series(dtype=float)
+
+    return pd.DataFrame(closes)
+
+
+def momentum_metrics(price_series: pd.Series, lookbacks=MOMENTUM_LOOKBACKS) -> dict:
+    """Compute 3/6/12M returns."""
+    returns = {}
+    for days, label in zip(lookbacks, ["ret_3m", "ret_6m", "ret_12m"]):
+        if len(price_series) < days + 1:
+            returns[label] = float("nan")
+            continue
+        start_price = price_series.iloc[-days - 1]
+        end_price = price_series.iloc[-1]
+        returns[label] = (end_price / start_price - 1) * 100
+    return returns
+
+
+def momentum_score(ret_3m: float, power: float = DEFAULT_POWER) -> float:
+    """Score based on 3M return."""
+    if pd.isna(ret_3m):
+        return 0.0
+    return max((1 + ret_3m / 100) ** power, 0.0)
+
+
+def weights_from_scores(scores: dict) -> dict:
+    total = sum(scores.values())
+    if total <= 0:
+        n = len(scores)
+        return {k: (100 / n) for k in scores} if n else {}
+    return {k: v / total * 100 for k, v in scores.items()}
+
+
+def compute_core_satellite_allocation(
+    stock_weight: float = 70.0,
+    bond_weight: float = 30.0,
+    core_ratio: float = 0.7,
+    satellite_ratio: float = 0.3,
+    power: float = DEFAULT_POWER,
+) -> pd.DataFrame:
+    """
+    Calculate allocation across core/satellite/bond buckets using momentum scores.
+    """
+    price_map = {**CORE_TICKERS, **SATELLITE_TICKERS, **BOND_TICKERS}
+    prices = fetch_prices(price_map)
+
+    rows = []
+
+    def process_bucket(name: str, tickers: dict, bucket_weight: float):
+        series_scores = {}
+        metrics_cache = {}
+        for logical in tickers:
+            s = prices[logical].dropna() if logical in prices else pd.Series(dtype=float)
+            metrics = momentum_metrics(s)
+            metrics_cache[logical] = metrics
+            series_scores[logical] = momentum_score(metrics["ret_3m"], power)
+
+        weight_pct = weights_from_scores(series_scores)
+
+        for logical in tickers:
+            m = metrics_cache.get(logical, {})
+            rows.append({
+                "group": name,
+                "ticker": logical,
+                "yfinance": tickers[logical],
+                "ret_3m": m.get("ret_3m"),
+                "ret_6m": m.get("ret_6m"),
+                "ret_12m": m.get("ret_12m"),
+                "score": series_scores.get(logical, 0.0),
+                "group_weight_pct": bucket_weight,
+                "final_weight_pct": bucket_weight * (weight_pct.get(logical, 0.0) / 100),
+            })
+
+    core_weight = stock_weight * core_ratio
+    satellite_weight = stock_weight * satellite_ratio
+
+    process_bucket("Core", CORE_TICKERS, core_weight)
+    process_bucket("Satellite", SATELLITE_TICKERS, satellite_weight)
+    process_bucket("Bond", BOND_TICKERS, bond_weight)
+
+    df = pd.DataFrame(rows)
+    return df.sort_values(["group", "final_weight_pct"], ascending=[True, False])
+
 
 # Page config
 st.set_page_config(
@@ -119,8 +330,7 @@ def render_sidebar():
         # Navigation
         page = st.radio(
             "Navigation",
-            ["Overview", "Performance Analysis", "Holdings", "Transactions",
-             "Momentum Allocation", "Absolute Momentum", "Asset Allocation"],
+            ["Overview", "Performance Analysis", "Holdings", "Transactions", "Cash Flow", "Risk", "Core/Satellite Allocation"],
             label_visibility="collapsed"
         )
 
@@ -380,7 +590,8 @@ def render_holdings():
         return
 
     # Summary metrics
-    total_value = latest_holdings['평가금액'].sum()
+    value_col = get_value_column(latest_holdings)
+    total_value = latest_holdings[value_col].sum()
     total_profit = latest_holdings['평가손익'].sum()
     overall_return = (total_profit / (total_value - total_profit)) * 100 if (total_value - total_profit) != 0 else 0
 
@@ -399,13 +610,14 @@ def render_holdings():
     st.subheader("Holdings by Asset Type")
 
     by_asset = data_loader.get_holdings_by_asset_type()
+    type_col = get_asset_type_column(latest_holdings)
 
     col1, col2 = st.columns(2)
 
     with col1:
         if not by_asset.empty:
             fig = px.pie(
-                values=by_asset['평가금액'],
+                values=by_asset[value_col] if value_col in by_asset.columns else by_asset.iloc[:, 0],
                 names=by_asset.index,
                 title="Asset Allocation (All)"
             )
@@ -413,11 +625,11 @@ def render_holdings():
 
     with col2:
         # 해외주식 종목별 비중
-        stock_holdings = latest_holdings[latest_holdings['상품유형'] == '해외주식'].copy()
+        stock_holdings = latest_holdings[latest_holdings[type_col] == '해외주식'].copy() if type_col else pd.DataFrame()
         if not stock_holdings.empty:
             fig2 = px.pie(
                 stock_holdings,
-                values='평가금액',
+                values=value_col,
                 names='종목명',
                 title="Stock Holdings (Individual)"
             )
@@ -431,7 +643,7 @@ def render_holdings():
     st.dataframe(
         latest_holdings[[
             '계좌번호', '상품유형', '종목명', '잔고수량',
-            '현재가', '매수금액', '평가금액', '평가손익', '수익률(%)'
+            '현재가', '매수금액', value_col, '평가손익', '수익률(%)'
         ]],
         use_container_width=True,
         hide_index=True
@@ -440,22 +652,39 @@ def render_holdings():
     # Stock holdings detail
     st.subheader("Stock Holdings Detail")
 
-    stock_holdings = latest_holdings[latest_holdings['상품유형'] == '해외주식'].copy()
+    stock_holdings = latest_holdings[latest_holdings[type_col] == '해외주식'].copy() if type_col else pd.DataFrame()
     if not stock_holdings.empty:
         # Add percentage column
-        total_stock_value = stock_holdings['평가금액'].sum()
-        stock_holdings['비중(%)'] = (stock_holdings['평가금액'] / total_stock_value * 100).round(2)
+        total_stock_value = stock_holdings[value_col].sum()
+        stock_holdings['비중(%)'] = (stock_holdings[value_col] / total_stock_value * 100).round(2)
 
         st.dataframe(
             stock_holdings[[
                 '종목명', '잔고수량', '현재가', '매수금액',
-                '평가금액', '비중(%)', '평가손익', '수익률(%)'
-            ]].sort_values('평가금액', ascending=False),
+                value_col, '비중(%)', '평가손익', '수익률(%)'
+            ]].sort_values(value_col, ascending=False),
             use_container_width=True,
             hide_index=True
         )
     else:
         st.info("No stock holdings")
+
+    # Concentration and movers
+    st.subheader("Concentration & Top Movers")
+    top_weights = latest_holdings.sort_values(value_col, ascending=False).head(5)[['종목명', value_col, '수익률(%)']]
+    top_gainers = latest_holdings.sort_values('수익률(%)', ascending=False).head(5)[['종목명', value_col, '수익률(%)']]
+    top_losers = latest_holdings.sort_values('수익률(%)').head(5)[['종목명', value_col, '수익률(%)']]
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.markdown("**Top 5 by Weight**")
+        st.dataframe(top_weights, hide_index=True, use_container_width=True)
+    with col2:
+        st.markdown("**Top 5 Gainers**")
+        st.dataframe(top_gainers, hide_index=True, use_container_width=True)
+    with col3:
+        st.markdown("**Top 5 Losers**")
+        st.dataframe(top_losers, hide_index=True, use_container_width=True)
 
     # Account comparison
     st.subheader("Performance by Account")
@@ -525,391 +754,234 @@ def render_transactions(start_date=None, end_date=None):
     )
 
 
-def render_momentum_allocation():
-    """Render momentum allocation calculator page"""
-    st.header("Momentum-Based Country Allocation")
-
-    st.markdown("""
-    Calculate recommended allocation weights based on momentum strategy.
-    Higher momentum assets receive higher weights.
-    """)
-
-    # Settings
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        power = st.selectbox("Momentum Coefficient", [1.0, 2.0, 3.0], index=1)
-
-    with col2:
-        primary_period = st.selectbox("Primary Period", [3, 6, 12], index=1)
-
-    with col3:
-        use_dual = st.checkbox("Use Dual Momentum (3M+12M)", value=False)
-
-    # Custom tickers
-    with st.expander("Customize Tickers (Optional)"):
-        st.caption("Leave empty to use defaults")
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            sp500_ticker = st.text_input("S&P500", value="SPY")
-            kospi_ticker = st.text_input("KOSPI", value="069500.KS")
-            csi300_ticker = st.text_input("CSI300", value="ASHR")
-
-        with col2:
-            europe_ticker = st.text_input("Europe", value="VGK")
-            us_bond_ticker = st.text_input("US Treasury", value="TLT")
-            kr_bond_ticker = st.text_input("KR Treasury", value="148070.KS")
-
-        custom_tickers = {
-            'S&P500': sp500_ticker,
-            'KOSPI': kospi_ticker,
-            'CSI300': csi300_ticker,
-            'Europe': europe_ticker,
-            'US Treasury': us_bond_ticker,
-            'KR Treasury': kr_bond_ticker
-        }
-
-    # Calculate button
-    if st.button("Calculate Allocation", type="primary"):
-        with st.spinner("Fetching market data..."):
-            try:
-                # Get momentum allocation table
-                allocation_table = momentum_calculator.get_momentum_allocation_table(
-                    tickers=custom_tickers,
-                    momentum_months=[3, 6, 12],
-                    power=power,
-                    use_dual=use_dual
-                )
-
-                if allocation_table.empty:
-                    st.error("Failed to fetch data. Please check ticker symbols and try again.")
-                    return
-
-                # Display results
-                st.success("Calculation complete!")
-
-                # Allocation weights chart
-                st.subheader("Recommended Allocation")
-
-                col1, col2 = st.columns([1, 1])
-
-                with col1:
-                    # Pie chart
-                    weights = allocation_table['Recommended Weight (%)']
-                    weights = weights[weights > 0]  # Only show non-zero weights
-
-                    if not weights.empty:
-                        fig = px.pie(
-                            values=weights.values,
-                            names=weights.index,
-                            title="Recommended Portfolio Allocation"
-                        )
-                        st.plotly_chart(fig, use_container_width=True)
-                    else:
-                        st.warning("No assets with positive momentum")
-
-                with col2:
-                    # Bar chart of momentum scores
-                    momentum_col = 'Dual Momentum (%)' if use_dual else f'{primary_period}M Return (%)'
-
-                    fig2 = go.Figure()
-                    fig2.add_trace(go.Bar(
-                        x=allocation_table.index,
-                        y=allocation_table[momentum_col],
-                        marker_color=['green' if x > 0 else 'red' for x in allocation_table[momentum_col]],
-                        name='Momentum Return'
-                    ))
-
-                    fig2.update_layout(
-                        title=f"{momentum_col}",
-                        xaxis_title="Asset",
-                        yaxis_title="Return (%)",
-                        height=400
-                    )
-
-                    st.plotly_chart(fig2, use_container_width=True)
-
-                # Full table
-                st.subheader("Detailed Analysis")
-                st.dataframe(allocation_table, use_container_width=True)
-
-                # Compare with current holdings
-                st.subheader("Compare with Current Holdings")
-
-                latest_holdings = data_loader.get_latest_holdings()
-
-                if not latest_holdings.empty:
-                    # Calculate current allocation
-                    total_value = latest_holdings['평가금액'].sum()
-
-                    current_allocation = pd.DataFrame({
-                        'Current Weight (%)': [(latest_holdings['평가금액'].sum() / total_value * 100)]
-                    }, index=['Total Portfolio'])
-
-                    # Show comparison
-                    st.info(f"**Current Total Portfolio Value**: ₩{total_value:,.0f}")
-
-                    # Map holdings to index names (simplified)
-                    st.caption("For detailed rebalancing, use the 'Asset Allocation' page")
-
-                else:
-                    st.info("No current holdings data available for comparison")
-
-            except Exception as e:
-                st.error(f"Error calculating allocation: {str(e)}")
-                st.exception(e)
-
-
-def render_absolute_momentum():
-    """Render absolute momentum signals page"""
-    st.header("Absolute Momentum Signals")
-
-    st.markdown("""
-    Absolute momentum strategy: Buy when momentum > 0%, Stop when momentum < 0%.
-    This helps avoid holding assets during downtrends.
-    """)
-
-    # Settings
-    col1, col2 = st.columns(2)
-
-    with col1:
-        threshold_months = st.selectbox("Momentum Period", [3, 6, 12], index=1)
-
-    with col2:
-        st.caption(f"Using {threshold_months}-month return as signal")
-
-    # Custom tickers
-    with st.expander("Customize Tickers (Optional)"):
-        col1, col2 = st.columns(2)
-
-        with col1:
-            sp500_ticker = st.text_input("S&P500", value="SPY")
-            kospi_ticker = st.text_input("KOSPI", value="069500.KS")
-            csi300_ticker = st.text_input("CSI300", value="ASHR")
-
-        with col2:
-            europe_ticker = st.text_input("Europe", value="VGK")
-            us_bond_ticker = st.text_input("US Treasury", value="TLT")
-            kr_bond_ticker = st.text_input("KR Treasury", value="148070.KS")
-
-        custom_tickers = {
-            'S&P500': sp500_ticker,
-            'KOSPI': kospi_ticker,
-            'CSI300': csi300_ticker,
-            'Europe': europe_ticker,
-            'US Treasury': us_bond_ticker,
-            'KR Treasury': kr_bond_ticker
-        }
-
-    # Calculate button
-    if st.button("Get Signals", type="primary"):
-        with st.spinner("Fetching market data..."):
-            try:
-                # Initialize allocator
-                allocator = momentum_calculator.MomentumAllocator(tickers=custom_tickers)
-                allocator.update_prices()
-
-                # Get signals
-                signals = allocator.get_absolute_signals(threshold_months=threshold_months)
-
-                if signals.empty:
-                    st.error("Failed to fetch data. Please check ticker symbols.")
-                    return
-
-                st.success("Signals updated!")
-
-                # Display signals
-                st.subheader("Current Signals")
-
-                # Add colored background
-                def highlight_signal(row):
-                    if '🟢' in row['Signal']:
-                        return ['background-color: #d4edda'] * len(row)
-                    else:
-                        return ['background-color: #f8d7da'] * len(row)
-
-                styled_signals = signals.style.apply(highlight_signal, axis=1)
-                st.dataframe(styled_signals, use_container_width=True)
-
-                # Summary
-                col1, col2, col3 = st.columns(3)
-
-                buy_count = signals['Signal'].str.contains('🟢').sum()
-                stop_count = signals['Signal'].str.contains('🔴').sum()
-
-                with col1:
-                    st.metric("Buy Signals", buy_count)
-
-                with col2:
-                    st.metric("Stop Signals", stop_count)
-
-                with col3:
-                    st.metric("Total Assets", len(signals))
-
-                # Signal chart
-                st.subheader("Momentum Returns")
-
-                fig = go.Figure()
-                fig.add_trace(go.Bar(
-                    x=signals.index,
-                    y=signals['Return (%)'],
-                    marker_color=['green' if '🟢' in s else 'red' for s in signals['Signal']],
-                    text=signals['Signal'],
-                    textposition='outside'
-                ))
-
-                fig.add_hline(y=0, line_dash="dash", line_color="gray")
-
-                fig.update_layout(
-                    title=f"{threshold_months}-Month Momentum Returns",
-                    xaxis_title="Asset",
-                    yaxis_title="Return (%)",
-                    height=400
-                )
-
-                st.plotly_chart(fig, use_container_width=True)
-
-                # Interpretation
-                st.subheader("Interpretation")
-
-                st.markdown(f"""
-                **Signal Rules**:
-                - 🟢 **Buy**: {threshold_months}-month return > 0% → Positive momentum, safe to hold/buy
-                - 🔴 **Stop**: {threshold_months}-month return < 0% → Negative momentum, consider reducing/avoiding
-
-                **Current Market Status**:
-                - {buy_count} out of {len(signals)} assets showing positive momentum
-                - Market breadth: {(buy_count/len(signals)*100):.1f}% bullish
-                """)
-
-            except Exception as e:
-                st.error(f"Error fetching signals: {str(e)}")
-                st.exception(e)
-
-
-def render_asset_allocation():
-    """Render asset allocation simulator page"""
-    st.header("Asset Allocation Simulator & Rebalancing Tool")
-
-    st.markdown("""
-    Simulate different allocation scenarios and generate rebalancing plans.
-    """)
-
-    # Get current holdings
-    latest_holdings = data_loader.get_latest_holdings()
-
-    if latest_holdings.empty:
-        st.warning("No holdings data available")
+def render_cash_flow(start_date=None, end_date=None):
+    """Render cash flow and contribution insights"""
+    st.header("Cash Flow & Contributions")
+
+    perf = data_loader.load_performance_history()
+    if perf.empty:
+        st.warning("No performance data available")
         return
 
-    total_value = latest_holdings['평가금액'].sum()
+    perf = data_loader.filter_by_date_range(perf, '일자', start_date, end_date)
+    if perf.empty:
+        st.warning("No data for selected period")
+        return
 
-    st.info(f"**Current Portfolio Value**: ₩{total_value:,.0f}")
+    total_in = perf['입금액'].sum()
+    total_out = perf['출금액'].sum()
+    net_cf = total_in - total_out
+    invest_pnl = perf['투자손익'].sum()
 
-    # Current allocation analysis
-    st.subheader("Current Allocation")
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Total Deposits", format_won(total_in))
+    with col2:
+        st.metric("Total Withdrawals", format_won(total_out))
+    with col3:
+        st.metric("Net Contributions", format_won(net_cf))
+    with col4:
+        st.metric("Investment P&L", format_won(invest_pnl))
 
-    by_asset = data_loader.get_holdings_by_asset_type()
+    # Monthly cash flow
+    monthly = perf.copy()
+    monthly['월'] = monthly['일자'].dt.to_period('M')
+    monthly_cf = monthly.groupby('월').agg({
+        '입금액': 'sum',
+        '출금액': 'sum',
+        '투자손익': 'sum'
+    }).reset_index()
+    monthly_cf['월'] = monthly_cf['월'].astype(str)
+    monthly_cf['순입금'] = monthly_cf['입금액'] - monthly_cf['출금액']
 
-    if not by_asset.empty:
-        col1, col2 = st.columns(2)
+    st.subheader("Monthly Cash Flow")
+    fig_cf = go.Figure()
+    fig_cf.add_bar(name="Deposits", x=monthly_cf['월'], y=monthly_cf['입금액'], marker_color='#2ca02c')
+    fig_cf.add_bar(name="Withdrawals", x=monthly_cf['월'], y=-monthly_cf['출금액'], marker_color='#d62728')
+    fig_cf.add_scatter(name="Net Contributions", x=monthly_cf['월'], y=monthly_cf['순입금'],
+                       mode='lines+markers', line=dict(color='#1f77b4', width=2))
+    fig_cf.update_layout(barmode='relative', xaxis_title="Month", yaxis_title="Amount (₩)",
+                         height=360, hovermode='x unified')
+    st.plotly_chart(fig_cf, use_container_width=True)
 
-        with col1:
-            fig = px.pie(
-                values=by_asset['평가금액'],
-                names=by_asset.index,
-                title="Current Asset Allocation"
-            )
-            st.plotly_chart(fig, use_container_width=True)
+    st.subheader("Cumulative Contributions vs Portfolio Value")
+    perf_sorted = perf.sort_values('일자').copy()
+    perf_sorted['누적순입금'] = (perf_sorted['입금액'] - perf_sorted['출금액']).cumsum()
+    fig_cum = go.Figure()
+    fig_cum.add_trace(go.Scatter(
+        x=perf_sorted['일자'], y=perf_sorted['누적순입금'],
+        mode='lines', name='Cumulative Net Contributions', line=dict(color='#1f77b4', width=2)
+    ))
+    fig_cum.add_trace(go.Scatter(
+        x=perf_sorted['일자'], y=perf_sorted['기말평가금액'],
+        mode='lines', name='Portfolio Value', line=dict(color='#ff7f0e', width=2)
+    ))
+    fig_cum.update_layout(
+        xaxis_title="Date", yaxis_title="Amount (₩)", hovermode='x unified', height=380
+    )
+    st.plotly_chart(fig_cum, use_container_width=True)
 
-        with col2:
-            # Show breakdown
-            breakdown = by_asset.copy()
-            breakdown['Weight (%)'] = (breakdown['평가금액'] / breakdown['평가금액'].sum() * 100).round(2)
-            st.dataframe(breakdown[['평가금액', 'Weight (%)']], use_container_width=True)
-
-    # Allocation sliders
-    st.subheader("Target Allocation Settings")
-
-    st.markdown("**Stock vs Bond Allocation**")
-    stock_target = st.slider(
-        "Stock Allocation (%)",
-        min_value=50,
-        max_value=80,
-        value=70,
-        step=5,
-        help="Range: 50% (defensive) to 80% (aggressive)"
+    st.subheader("Monthly Details")
+    st.dataframe(
+        monthly_cf[['월', '입금액', '출금액', '순입금', '투자손익']].sort_values('월'),
+        use_container_width=True, hide_index=True
     )
 
-    bond_target = 100 - stock_target
-    st.caption(f"Bond Allocation: {bond_target}%")
 
-    st.markdown("**Core vs Satellite Allocation**")
-    core_target = st.slider(
-        "Core Allocation (%)",
-        min_value=50,
-        max_value=100,
-        value=70,
-        step=10,
-        help="Range: 50% (active) to 100% (passive index only)"
-    )
+def render_core_satellite_allocation():
+    """Render momentum-based core/satellite/bond allocation."""
+    st.header("Core / Satellite / Bond Allocation (Momentum)")
 
-    satellite_target = 100 - core_target
-    st.caption(f"Satellite Allocation: {satellite_target}%")
-
-    # Target allocation summary
-    st.subheader("Target Portfolio Composition")
+    st.caption("3/6/12개월 수익률 계산, 3개월 수익률 기반 계수 2 제곱으로 스코어 → 비중")
 
     col1, col2, col3 = st.columns(3)
-
     with col1:
-        st.metric("Stock Target", f"{stock_target}%")
-        st.caption(f"₩{(total_value * stock_target / 100):,.0f}")
-
+        stock_weight = st.slider("주식 비중 (%)", min_value=50, max_value=90, value=70, step=5)
     with col2:
-        st.metric("Bond Target", f"{bond_target}%")
-        st.caption(f"₩{(total_value * bond_target / 100):,.0f}")
-
+        bond_weight = 100 - stock_weight
+        st.metric("채권 비중 (%)", f"{bond_weight}%")
     with col3:
-        st.metric("Core Target", f"{core_target}%")
-        st.caption(f"₩{(total_value * core_target / 100):,.0f}")
+        power = st.slider("모멘텀 계수 (3M)", min_value=1.0, max_value=3.0, value=DEFAULT_POWER, step=0.5)
 
-    # Rebalancing plan
-    st.subheader("Rebalancing Plan")
+    col1, col2 = st.columns(2)
+    with col1:
+        core_ratio = st.slider("코어 비중 (주식 내)", min_value=0.5, max_value=0.9, value=0.7, step=0.05)
+    with col2:
+        satellite_ratio = 1 - core_ratio
+        st.metric("새틀라이트 비중 (주식 내)", f"{satellite_ratio*100:.0f}%")
 
-    st.markdown("""
-    Based on your target allocation, here's what you need to do:
-    """)
+    if st.button("Calculate Allocation", type="primary"):
+        with st.spinner("시장 데이터 수집 중..."):
+            try:
+                df = compute_core_satellite_allocation(
+                    stock_weight=stock_weight,
+                    bond_weight=bond_weight,
+                    core_ratio=core_ratio,
+                    satellite_ratio=satellite_ratio,
+                    power=power,
+                )
+            except Exception as e:
+                st.error(f"계산 오류: {e}")
+                return
 
-    # Calculate current stock/bond ratio (simplified)
-    # This is a simplified version - in reality you'd need to classify each holding
-    st.info("**Note**: Detailed rebalancing calculations require asset classification. Use momentum allocation tool for specific recommendations.")
+        if df.empty:
+            st.warning("데이터를 불러오지 못했습니다. 티커를 확인하세요.")
+            return
 
-    # Show sample rebalancing table
-    st.markdown("**Sample Rebalancing Workflow**:")
-    st.markdown("""
-    1. Go to 'Momentum Allocation' page to get recommended country/index weights
-    2. Compare recommended weights with your target allocation
-    3. Calculate required trades based on current holdings
-    4. Execute trades through your broker
-    5. Update your holdings CSV and refresh the dashboard
-    """)
+        # Summary
+        st.subheader("추천 비중")
+        fig = px.bar(
+            df,
+            x="ticker",
+            y="final_weight_pct",
+            color="group",
+            title="최종 비중 (%)",
+            text="final_weight_pct",
+            category_orders={"group": ["Core", "Satellite", "Bond"]}
+        )
+        fig.update_traces(texttemplate="%{text:.2f}%", textposition="outside")
+        fig.update_layout(yaxis_title="Weight (%)", height=420)
+        st.plotly_chart(fig, use_container_width=True)
 
-    # Holdings detail
-    st.subheader("Current Holdings Detail")
-
-    display_cols = ['종목명', '평가금액', '수익률(%)']
-    if all(col in latest_holdings.columns for col in display_cols):
-        holdings_display = latest_holdings[display_cols].copy()
-        holdings_display['Weight (%)'] = (latest_holdings['평가금액'] / total_value * 100).round(2)
-
+        st.subheader("세부 지표")
         st.dataframe(
-            holdings_display.sort_values('평가금액', ascending=False),
+            df.rename(columns={
+                "ret_3m": "3M 수익률 (%)",
+                "ret_6m": "6M 수익률 (%)",
+                "ret_12m": "12M 수익률 (%)",
+                "score": "모멘텀 스코어",
+                "group_weight_pct": "버킷 비중 (%)",
+                "final_weight_pct": "최종 비중 (%)",
+            }),
             use_container_width=True,
             hide_index=True
         )
+
+        st.caption("스코어 = (1 + 3M 수익률) ** 계수; 각 버킷 내 스코어 비율로 배분.")
+
+
+def render_risk_insights(start_date=None, end_date=None):
+    """Render risk and return analytics"""
+    st.header("Risk & Return Profile")
+
+    analyzer = load_analyzer()
+    perf = analyzer.performance.copy()
+
+    if perf.empty:
+        st.warning("No performance data available")
+        return
+
+    # Filter
+    if start_date:
+        perf = perf[perf['일자'] >= pd.to_datetime(start_date)]
+    if end_date:
+        perf = perf[perf['일자'] <= pd.to_datetime(end_date)]
+
+    if perf.empty:
+        st.warning("No data for selected period")
+        return
+
+    perf = perf.sort_values('일자')
+    perf['daily_return'] = (perf['투자손익'] / perf['기초평가금액']) * 100
+
+    metrics = analyzer.calculate_performance_metrics(start_date, end_date)
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Volatility (Ann.)", format_pct(metrics.get('volatility', 0)))
+        st.metric("Max Drawdown", format_pct(metrics.get('max_drawdown', 0)))
+    with col2:
+        st.metric("Sharpe Ratio", f"{metrics.get('sharpe_ratio', 0):.2f}")
+        st.metric("Win Rate", format_pct(metrics.get('win_rate', 0)))
+    with col3:
+        st.metric("Best Day", format_pct(metrics.get('best_day', 0)))
+        st.metric("Worst Day", format_pct(metrics.get('worst_day', 0)))
+
+    # Distribution
+    st.subheader("Distribution of Daily Returns")
+    fig_hist = px.histogram(perf, x='daily_return', nbins=30, color_discrete_sequence=['#1f77b4'])
+    fig_hist.update_layout(xaxis_title="Daily Return (%)", yaxis_title="Frequency", height=360)
+    st.plotly_chart(fig_hist, use_container_width=True)
+
+    # Rolling volatility
+    st.subheader("30-Day Rolling Volatility (Ann.)")
+    perf['rolling_vol'] = perf['daily_return'].rolling(30).std() * (252 ** 0.5)
+    fig_vol = go.Figure()
+    fig_vol.add_trace(go.Scatter(
+        x=perf['일자'], y=perf['rolling_vol'],
+        mode='lines', name='Rolling Volatility', line=dict(color='#9467bd', width=2)
+    ))
+    fig_vol.update_layout(xaxis_title="Date", yaxis_title="Volatility (%)", height=360, hovermode='x unified')
+    st.plotly_chart(fig_vol, use_container_width=True)
+
+    # Drawdown
+    st.subheader("Drawdown Curve")
+    drawdown = analyzer.get_drawdown_series()
+    if start_date:
+        drawdown = drawdown[drawdown.index >= pd.to_datetime(start_date)]
+    if end_date:
+        drawdown = drawdown[drawdown.index <= pd.to_datetime(end_date)]
+
+    fig_dd = go.Figure()
+    fig_dd.add_trace(go.Scatter(
+        x=drawdown.index, y=drawdown.values,
+        mode='lines', name='Drawdown', line=dict(color='#d62728', width=2), fill='tozeroy'
+    ))
+    fig_dd.update_layout(xaxis_title="Date", yaxis_title="Drawdown (%)", height=360, hovermode='x unified')
+    st.plotly_chart(fig_dd, use_container_width=True)
+
+    # Best / worst days
+    st.subheader("Best & Worst Days")
+    top = perf.nlargest(5, 'daily_return')[['일자', 'daily_return']]
+    worst = perf.nsmallest(5, 'daily_return')[['일자', 'daily_return']]
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("**Top 5 Days**")
+        st.dataframe(top.rename(columns={'daily_return': 'Return (%)'}), use_container_width=True, hide_index=True)
+    with col2:
+        st.markdown("**Bottom 5 Days**")
+        st.dataframe(worst.rename(columns={'daily_return': 'Return (%)'}), use_container_width=True, hide_index=True)
+
 
 
 def main():
@@ -926,12 +998,12 @@ def main():
         render_holdings()
     elif page == "Transactions":
         render_transactions(start_date, end_date)
-    elif page == "Momentum Allocation":
-        render_momentum_allocation()
-    elif page == "Absolute Momentum":
-        render_absolute_momentum()
-    elif page == "Asset Allocation":
-        render_asset_allocation()
+    elif page == "Cash Flow":
+        render_cash_flow(start_date, end_date)
+    elif page == "Risk":
+        render_risk_insights(start_date, end_date)
+    elif page == "Core/Satellite Allocation":
+        render_core_satellite_allocation()
 
 
 if __name__ == "__main__":

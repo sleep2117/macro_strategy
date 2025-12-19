@@ -12,6 +12,23 @@ BASE_DIR = Path(__file__).parent
 DATABASE_DIR = BASE_DIR / "database"
 
 
+def _get_asset_type_column(df: pd.DataFrame) -> str:
+    """Find column indicating asset type."""
+    for candidate in ['상품유형', '상품종류', '상품구분', '자산군']:
+        if candidate in df.columns:
+            return candidate
+    return None
+
+
+def get_value_column(df: pd.DataFrame) -> str:
+    """Best-effort detection of 평가금액-like column name."""
+    for candidate in ["평가금액", "평가 금액", "평가가액", "평가금액(원)"]:
+        if candidate in df.columns:
+            return candidate
+    numeric_cols = [c for c in df.columns if pd.api.types.is_numeric_dtype(df[c])]
+    return numeric_cols[0] if numeric_cols else df.columns[0]
+
+
 def load_performance_history() -> pd.DataFrame:
     """
     Load historical performance data
@@ -228,9 +245,12 @@ def get_performance_summary(start_date=None, end_date=None) -> dict:
     total_withdrawals = df['출금액'].sum()
     total_investment_profit = df['투자손익'].sum()
 
-    # Calculate returns (입출금 제외, 순수 투자수익만)
-    # 복리 수익률 계산
-    daily_returns = (df['투자손익'] / df['기초평가금액']) * 100
+    # Flow-adjusted daily returns (exclude 입금/출금 영향)
+    net_flow = df['입금액'] - df['출금액']
+    denom = df['기초평가금액'] + 0.5 * net_flow
+    denom = denom.replace(0, pd.NA)
+    daily_returns = (df['투자손익'] / denom) * 100
+    daily_returns = daily_returns.fillna(0)
     total_return_pct = ((1 + daily_returns / 100).prod() - 1) * 100
 
     summary = {
@@ -297,14 +317,20 @@ def get_holdings_by_asset_type() -> pd.DataFrame:
     if df.empty:
         return df
 
-    summary = df.groupby('상품유형').agg({
-        '평가금액': 'sum',
+    type_col = _get_asset_type_column(df)
+    if type_col is None:
+        return pd.DataFrame()
+
+    value_col = get_value_column(df)
+
+    summary = df.groupby(type_col).agg({
+        value_col: 'sum',
         '평가손익': 'sum',
         '종목명': 'count'
     }).rename(columns={'종목명': '종목수'})
 
     # Calculate return percentage
-    summary['수익률(%)'] = (summary['평가손익'] / (summary['평가금액'] - summary['평가손익'])) * 100
+    summary['수익률(%)'] = (summary['평가손익'] / (summary[value_col] - summary['평가손익'])) * 100
 
     return summary
 

@@ -1,0 +1,14 @@
+{
+  "last_update": "2025-10-31T21:44:10.257208",
+  "data_period": {
+    "start": "2025-10-01",
+    "end": "2025-10-30"
+  },
+  "record_counts": {
+    "performance": 17,
+    "holdings": 6,
+    "transactions": 15,
+    "accounts": 2
+  },
+  "version": "1.0.0"
+}

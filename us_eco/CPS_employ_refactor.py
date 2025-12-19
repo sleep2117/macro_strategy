@@ -203,6 +203,63 @@ CPS_SERIES = {
     'unemployment_rate_pacific_islander_nsa': 'LNU04035553',
     'not_in_labor_force_pacific_islander_nsa': 'LNU05035553',
     
+    # Nativity status - total (NSA)
+    'population_foreign_born_16_over_nsa': 'LNU00073395',
+    'civilian_labor_force_foreign_born_16_over_nsa': 'LNU01073395',
+    'participation_rate_foreign_born_16_over_nsa': 'LNU01373395',
+    'employment_foreign_born_16_over_nsa': 'LNU02073395',
+    'employment_population_ratio_foreign_born_16_over_nsa': 'LNU02373395',
+    'unemployment_foreign_born_16_over_nsa': 'LNU03073395',
+    'unemployment_rate_foreign_born_16_over_nsa': 'LNU04073395',
+    'not_in_labor_force_foreign_born_16_over_nsa': 'LNU05073395',
+
+    'population_native_born_16_over_nsa': 'LNU00073413',
+    'civilian_labor_force_native_born_16_over_nsa': 'LNU01073413',
+    'participation_rate_native_born_16_over_nsa': 'LNU01373413',
+    'employment_native_born_16_over_nsa': 'LNU02073413',
+    'employment_population_ratio_native_born_16_over_nsa': 'LNU02373413',
+    'unemployment_native_born_16_over_nsa': 'LNU03073413',
+    'unemployment_rate_native_born_16_over_nsa': 'LNU04073413',
+    'not_in_labor_force_native_born_16_over_nsa': 'LNU05073413',
+
+    # Nativity status - men (NSA)
+    'population_foreign_born_men_16_over_nsa': 'LNU00073396',
+    'civilian_labor_force_foreign_born_men_16_over_nsa': 'LNU01073396',
+    'participation_rate_foreign_born_men_16_over_nsa': 'LNU01373396',
+    'employment_foreign_born_men_16_over_nsa': 'LNU02073396',
+    'employment_population_ratio_foreign_born_men_16_over_nsa': 'LNU02373396',
+    'unemployment_foreign_born_men_16_over_nsa': 'LNU03073396',
+    'unemployment_rate_foreign_born_men_16_over_nsa': 'LNU04073396',
+    'not_in_labor_force_foreign_born_men_16_over_nsa': 'LNU05073396',
+
+    'population_native_born_men_16_over_nsa': 'LNU00073414',
+    'civilian_labor_force_native_born_men_16_over_nsa': 'LNU01073414',
+    'participation_rate_native_born_men_16_over_nsa': 'LNU01373414',
+    'employment_native_born_men_16_over_nsa': 'LNU02073414',
+    'employment_population_ratio_native_born_men_16_over_nsa': 'LNU02373414',
+    'unemployment_native_born_men_16_over_nsa': 'LNU03073414',
+    'unemployment_rate_native_born_men_16_over_nsa': 'LNU04073414',
+    'not_in_labor_force_native_born_men_16_over_nsa': 'LNU05073414',
+
+    # Nativity status - women (NSA)
+    'population_foreign_born_women_16_over_nsa': 'LNU00073397',
+    'civilian_labor_force_foreign_born_women_16_over_nsa': 'LNU01073397',
+    'participation_rate_foreign_born_women_16_over_nsa': 'LNU01373397',
+    'employment_foreign_born_women_16_over_nsa': 'LNU02073397',
+    'employment_population_ratio_foreign_born_women_16_over_nsa': 'LNU02373397',
+    'unemployment_foreign_born_women_16_over_nsa': 'LNU03073397',
+    'unemployment_rate_foreign_born_women_16_over_nsa': 'LNU04073397',
+    'not_in_labor_force_foreign_born_women_16_over_nsa': 'LNU05073397',
+
+    'population_native_born_women_16_over_nsa': 'LNU00073415',
+    'civilian_labor_force_native_born_women_16_over_nsa': 'LNU01073415',
+    'participation_rate_native_born_women_16_over_nsa': 'LNU01373415',
+    'employment_native_born_women_16_over_nsa': 'LNU02073415',
+    'employment_population_ratio_native_born_women_16_over_nsa': 'LNU02373415',
+    'unemployment_native_born_women_16_over_nsa': 'LNU03073415',
+    'unemployment_rate_native_born_women_16_over_nsa': 'LNU04073415',
+    'not_in_labor_force_native_born_women_16_over_nsa': 'LNU05073415',
+
     # === 기본 지표들의 Not Seasonally Adjusted 버전 ===
     'civilian_labor_force_nsa': 'LNU01000000',
     'participation_rate_nsa': 'LNU01300000',
@@ -399,7 +456,64 @@ CPS_KOREAN_NAMES = {
     'LNU04035553': '실업률 - 하와이/태평양 원주민 (비계절조정)',
     'LNU05035553': '비경제활동인구 - 하와이/태평양 원주민 (비계절조정)',
     
-    # === 기본 지표들의 비계절조정 버전 한국어 매핑 ===
+    
+    # Nativity status - total (NSA)
+    'population_foreign_born_16_over_nsa': '????? - ?? ??(16? ??, ?????)',
+    'civilian_labor_force_foreign_born_16_over_nsa': '?????? - ?? ??(16? ??, ?????)',
+    'participation_rate_foreign_born_16_over_nsa': '??????? - ?? ??(16? ??, ?????)',
+    'employment_foreign_born_16_over_nsa': '???? - ?? ??(16? ??, ?????)',
+    'employment_population_ratio_foreign_born_16_over_nsa': '??? - ?? ??(16? ??, ?????)',
+    'unemployment_foreign_born_16_over_nsa': '???? - ?? ??(16? ??, ?????)',
+    'unemployment_rate_foreign_born_16_over_nsa': '??? - ?? ??(16? ??, ?????)',
+    'not_in_labor_force_foreign_born_16_over_nsa': '??????? - ?? ??(16? ??, ?????)',
+
+    'population_native_born_16_over_nsa': '????? - ?? ??(16? ??, ?????)',
+    'civilian_labor_force_native_born_16_over_nsa': '?????? - ?? ??(16? ??, ?????)',
+    'participation_rate_native_born_16_over_nsa': '??????? - ?? ??(16? ??, ?????)',
+    'employment_native_born_16_over_nsa': '???? - ?? ??(16? ??, ?????)',
+    'employment_population_ratio_native_born_16_over_nsa': '??? - ?? ??(16? ??, ?????)',
+    'unemployment_native_born_16_over_nsa': '???? - ?? ??(16? ??, ?????)',
+    'unemployment_rate_native_born_16_over_nsa': '??? - ?? ??(16? ??, ?????)',
+    'not_in_labor_force_native_born_16_over_nsa': '??????? - ?? ??(16? ??, ?????)',
+
+    # Nativity status - men (NSA)
+    'population_foreign_born_men_16_over_nsa': '????? - ?? ?? ??(16? ??, ?????)',
+    'civilian_labor_force_foreign_born_men_16_over_nsa': '?????? - ?? ?? ??(16? ??, ?????)',
+    'participation_rate_foreign_born_men_16_over_nsa': '??????? - ?? ?? ??(16? ??, ?????)',
+    'employment_foreign_born_men_16_over_nsa': '???? - ?? ?? ??(16? ??, ?????)',
+    'employment_population_ratio_foreign_born_men_16_over_nsa': '??? - ?? ?? ??(16? ??, ?????)',
+    'unemployment_foreign_born_men_16_over_nsa': '???? - ?? ?? ??(16? ??, ?????)',
+    'unemployment_rate_foreign_born_men_16_over_nsa': '??? - ?? ?? ??(16? ??, ?????)',
+    'not_in_labor_force_foreign_born_men_16_over_nsa': '??????? - ?? ?? ??(16? ??, ?????)',
+
+    'population_native_born_men_16_over_nsa': '????? - ?? ?? ??(16? ??, ?????)',
+    'civilian_labor_force_native_born_men_16_over_nsa': '?????? - ?? ?? ??(16? ??, ?????)',
+    'participation_rate_native_born_men_16_over_nsa': '??????? - ?? ?? ??(16? ??, ?????)',
+    'employment_native_born_men_16_over_nsa': '???? - ?? ?? ??(16? ??, ?????)',
+    'employment_population_ratio_native_born_men_16_over_nsa': '??? - ?? ?? ??(16? ??, ?????)',
+    'unemployment_native_born_men_16_over_nsa': '???? - ?? ?? ??(16? ??, ?????)',
+    'unemployment_rate_native_born_men_16_over_nsa': '??? - ?? ?? ??(16? ??, ?????)',
+    'not_in_labor_force_native_born_men_16_over_nsa': '??????? - ?? ?? ??(16? ??, ?????)',
+
+    # Nativity status - women (NSA)
+    'population_foreign_born_women_16_over_nsa': '????? - ?? ?? ??(16? ??, ?????)',
+    'civilian_labor_force_foreign_born_women_16_over_nsa': '?????? - ?? ?? ??(16? ??, ?????)',
+    'participation_rate_foreign_born_women_16_over_nsa': '??????? - ?? ?? ??(16? ??, ?????)',
+    'employment_foreign_born_women_16_over_nsa': '???? - ?? ?? ??(16? ??, ?????)',
+    'employment_population_ratio_foreign_born_women_16_over_nsa': '??? - ?? ?? ??(16? ??, ?????)',
+    'unemployment_foreign_born_women_16_over_nsa': '???? - ?? ?? ??(16? ??, ?????)',
+    'unemployment_rate_foreign_born_women_16_over_nsa': '??? - ?? ?? ??(16? ??, ?????)',
+    'not_in_labor_force_foreign_born_women_16_over_nsa': '??????? - ?? ?? ??(16? ??, ?????)',
+
+    'population_native_born_women_16_over_nsa': '????? - ?? ?? ??(16? ??, ?????)',
+    'civilian_labor_force_native_born_women_16_over_nsa': '?????? - ?? ?? ??(16? ??, ?????)',
+    'participation_rate_native_born_women_16_over_nsa': '??????? - ?? ?? ??(16? ??, ?????)',
+    'employment_native_born_women_16_over_nsa': '???? - ?? ?? ??(16? ??, ?????)',
+    'employment_population_ratio_native_born_women_16_over_nsa': '??? - ?? ?? ??(16? ??, ?????)',
+    'unemployment_native_born_women_16_over_nsa': '???? - ?? ?? ??(16? ??, ?????)',
+    'unemployment_rate_native_born_women_16_over_nsa': '??? - ?? ?? ??(16? ??, ?????)',
+    'not_in_labor_force_native_born_women_16_over_nsa': '??????? - ?? ?? ??(16? ??, ?????)',
+# === 기본 지표들의 비계절조정 버전 한국어 매핑 ===
     'LNU01000000': '경제활동인구 (비계절조정)',
     'LNU01300000': '경제활동참가율 (비계절조정)',
     'LNU02000000': '취업자수 (비계절조정)',
@@ -465,7 +579,16 @@ CPS_CATEGORIES = {
     '노동시장참여': {
         '비경제활동': ['LNS15000000', 'LNS15026642', 'LNS15026645'],
         '진입/이탈': ['LNS13023557', 'LNS13023569']
+    },
+    'Nativity (NSA)': {
+        'Foreign born 16+': ['population_foreign_born_16_over_nsa', 'civilian_labor_force_foreign_born_16_over_nsa', 'participation_rate_foreign_born_16_over_nsa', 'employment_foreign_born_16_over_nsa', 'employment_population_ratio_foreign_born_16_over_nsa', 'unemployment_foreign_born_16_over_nsa', 'unemployment_rate_foreign_born_16_over_nsa', 'not_in_labor_force_foreign_born_16_over_nsa'],
+        'Native born 16+': ['population_native_born_16_over_nsa', 'civilian_labor_force_native_born_16_over_nsa', 'participation_rate_native_born_16_over_nsa', 'employment_native_born_16_over_nsa', 'employment_population_ratio_native_born_16_over_nsa', 'unemployment_native_born_16_over_nsa', 'unemployment_rate_native_born_16_over_nsa', 'not_in_labor_force_native_born_16_over_nsa'],
+        'Foreign born men 16+': ['population_foreign_born_men_16_over_nsa', 'civilian_labor_force_foreign_born_men_16_over_nsa', 'participation_rate_foreign_born_men_16_over_nsa', 'employment_foreign_born_men_16_over_nsa', 'employment_population_ratio_foreign_born_men_16_over_nsa', 'unemployment_foreign_born_men_16_over_nsa', 'unemployment_rate_foreign_born_men_16_over_nsa', 'not_in_labor_force_foreign_born_men_16_over_nsa'],
+        'Native born men 16+': ['population_native_born_men_16_over_nsa', 'civilian_labor_force_native_born_men_16_over_nsa', 'participation_rate_native_born_men_16_over_nsa', 'employment_native_born_men_16_over_nsa', 'employment_population_ratio_native_born_men_16_over_nsa', 'unemployment_native_born_men_16_over_nsa', 'unemployment_rate_native_born_men_16_over_nsa', 'not_in_labor_force_native_born_men_16_over_nsa'],
+        'Foreign born women 16+': ['population_foreign_born_women_16_over_nsa', 'civilian_labor_force_foreign_born_women_16_over_nsa', 'participation_rate_foreign_born_women_16_over_nsa', 'employment_foreign_born_women_16_over_nsa', 'employment_population_ratio_foreign_born_women_16_over_nsa', 'unemployment_foreign_born_women_16_over_nsa', 'unemployment_rate_foreign_born_women_16_over_nsa', 'not_in_labor_force_foreign_born_women_16_over_nsa'],
+        'Native born women 16+': ['population_native_born_women_16_over_nsa', 'civilian_labor_force_native_born_women_16_over_nsa', 'participation_rate_native_born_women_16_over_nsa', 'employment_native_born_women_16_over_nsa', 'employment_population_ratio_native_born_women_16_over_nsa', 'unemployment_native_born_women_16_over_nsa', 'unemployment_rate_native_born_women_16_over_nsa', 'not_in_labor_force_native_born_women_16_over_nsa']
     }
+
 }
 
 # %%

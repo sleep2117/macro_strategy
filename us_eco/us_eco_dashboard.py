@@ -628,10 +628,11 @@ def build_series_registry(metas: list[dict[str, Any]]) -> tuple[dict[str, dict[s
 
         for series in raw_df.columns:
             resolved_key = rename_map.get(series, series)
+            column_candidates = {series, resolved_key}
             available_types: list[str] = []
             for dtype_key, _ in STANDARD_DATA_KEYS:
                 df_candidate = data_dict.get(dtype_key)
-                if isinstance(df_candidate, pd.DataFrame) and series in df_candidate.columns:
+                if isinstance(df_candidate, pd.DataFrame) and any(col in df_candidate.columns for col in column_candidates):
                     available_types.append(dtype_key)
             if not available_types:
                 continue
@@ -1476,11 +1477,66 @@ def load_module_from_path(name: str, file_path: Path, use_stub: bool = True):
     if use_stub and original_group is not None:
         utils_module.load_economic_data_grouped = stub_group  # type: ignore[assignment]
 
+    plotly_show_original = None
+    plotly_io_show_original = None
+    plotly_io_module = None
+    mpl_pyplot = None
+    mpl_pyplot_show_original = None
+    mpl_figure_cls = None
+    mpl_figure_show_original = None
+
+    def _silent_plotly_show(self, *args, **kwargs):
+        return self
+
+    def _silent_callable(*args, **kwargs):
+        return None
+
+    try:
+        plotly_show_original = go.Figure.show  # type: ignore[attr-defined]
+        go.Figure.show = _silent_plotly_show  # type: ignore[assignment]
+    except AttributeError:
+        plotly_show_original = None
+
+    try:
+        import plotly.io as pio  # type: ignore
+
+        plotly_io_module = pio
+        plotly_io_show_original = pio.show  # type: ignore[attr-defined]
+        pio.show = _silent_callable  # type: ignore[assignment]
+    except Exception:
+        plotly_io_module = None
+        plotly_io_show_original = None
+
+    try:
+        import matplotlib.pyplot as plt  # type: ignore
+        from matplotlib.figure import Figure as MPLFigure  # type: ignore
+
+        mpl_pyplot = plt
+        mpl_pyplot_show_original = plt.show  # type: ignore[attr-defined]
+        plt.show = _silent_callable  # type: ignore[assignment]
+
+        mpl_figure_cls = MPLFigure
+        mpl_figure_show_original = MPLFigure.show  # type: ignore[attr-defined]
+        MPLFigure.show = _silent_callable  # type: ignore[assignment]
+    except Exception:
+        mpl_pyplot = None
+        mpl_pyplot_show_original = None
+        mpl_figure_cls = None
+        mpl_figure_show_original = None
+
     try:
         spec.loader.exec_module(module)  # type: ignore[arg-type]
     except Exception as exc:
         print(f"⚠️ {file_path} 로드 중 예외 발생: {exc}")
     finally:
+        if plotly_show_original is not None:
+            go.Figure.show = plotly_show_original  # type: ignore[assignment]
+        if plotly_io_module is not None and plotly_io_show_original is not None:
+            plotly_io_module.show = plotly_io_show_original  # type: ignore[assignment]
+        if mpl_pyplot is not None and mpl_pyplot_show_original is not None:
+            mpl_pyplot.show = mpl_pyplot_show_original  # type: ignore[assignment]
+        if mpl_figure_cls is not None and mpl_figure_show_original is not None:
+            mpl_figure_cls.show = mpl_figure_show_original  # type: ignore[assignment]
         if use_stub and original_load is not None:
             utils_module.load_economic_data = original_load  # type: ignore[assignment]
         if use_stub and original_group is not None:
@@ -1837,20 +1893,28 @@ def render_global_dashboard(metas: list[dict[str, Any]]) -> None:
         info["effective_label"] = final_label
 
     sidebar_key = f"global_active_labels_{st.session_state['global_selection_version']}"
+    key_to_info = {info["key"]: info for info in selected_infos}
     override_keys = st.session_state.pop("global_active_series_override", None)
     if override_keys:
         override_labels: list[str] = []
-        key_to_info = {info["key"]: info for info in selected_infos}
         for series_key in override_keys:
             info = key_to_info.get(series_key)
             if info:
                 override_labels.append(info["display_label"])
         if override_labels:
             st.session_state[sidebar_key] = override_labels
+
+    stored_labels = st.session_state.get(sidebar_key)
+    if stored_labels is None:
+        st.session_state[sidebar_key] = list(label_order)
+    else:
+        valid_labels = [label for label in stored_labels if label in label_order]
+        if valid_labels != stored_labels:
+            st.session_state[sidebar_key] = valid_labels if valid_labels else list(label_order)
+
     active_labels = st.sidebar.multiselect(
         "현재 선택된 시리즈",
         options=label_order,
-        default=label_order,
         key=sidebar_key,
         help="체크 해제하면 해당 시리즈가 제외됩니다.",
     )
@@ -2122,7 +2186,7 @@ def render_global_dashboard(metas: list[dict[str, Any]]) -> None:
             "차트 너비 (cm)",
             min_value=15.0,
             max_value=45.0,
-            value=24.0,
+            value=19.5,
             step=0.5,
             key="global_chart_width",
         )
@@ -2130,7 +2194,7 @@ def render_global_dashboard(metas: list[dict[str, Any]]) -> None:
             "차트 높이 (cm)",
             min_value=10.0,
             max_value=25.0,
-            value=12.0,
+            value=10.0,
             step=0.5,
             key="global_chart_height",
         )
@@ -2907,10 +2971,10 @@ def module_page(meta: dict[str, Any]) -> None:
             )
 
         chart_width_cm = st.slider(
-            "차트 너비 (cm)", min_value=15.0, max_value=45.0, value=24.0, step=0.5, key=f"width_{meta['module_path']}"
+            "차트 너비 (cm)", min_value=15.0, max_value=45.0, value=19.5, step=0.5, key=f"width_{meta['module_path']}"
         )
         chart_height_cm = st.slider(
-            "차트 높이 (cm)", min_value=10.0, max_value=25.0, value=12.0, step=0.5, key=f"height_{meta['module_path']}"
+            "차트 높이 (cm)", min_value=10.0, max_value=25.0, value=10.0, step=0.5, key=f"height_{meta['module_path']}"
         )
         chart_width = int(chart_width_cm * PX_PER_CM)
         chart_height = int(chart_height_cm * PX_PER_CM)

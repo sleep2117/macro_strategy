@@ -1,0 +1,203 @@
+name: us-eco auto update
+
+on:
+  schedule:
+    - cron: '0 0 * * *'   # 09:00 KST
+    - cron: '0 12 * * *'  # 21:00 KST
+  workflow_dispatch:
+    inputs:
+      batch_list:
+        description: '콤마 구분 배치 목록 (지정 시 스케줄 무시)'
+        required: false
+      slot:
+        description: 'AM/PM 수동 지정 (스케줄 매핑용)'
+        required: false
+      start_date:
+        description: '모듈 start_date 덮어쓰기 (예: 2020-01-01)'
+        required: false
+      sleep_seconds:
+        description: '모듈 간 대기 (초)'
+        required: false
+      smart_update:
+        type: boolean
+        default: true
+        description: 'smart_update 사용 여부'
+      force_reload:
+        type: boolean
+        default: false
+        description: 'force_reload 사용 여부'
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    concurrency: us-eco-update
+    defaults:
+      run:
+        working-directory: macro_strategy
+    env:
+      BLS_API_KEY_1: ${{ secrets.BLS_API_KEY_1 }}
+      BLS_API_KEY_2: ${{ secrets.BLS_API_KEY_2 }}
+      BLS_API_KEY_3: ${{ secrets.BLS_API_KEY_3 }}
+      FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Determine batches
+        id: plan
+        shell: bash
+        env:
+          INPUT_BATCHES: ${{ inputs.batch_list || '' }}
+          INPUT_SLOT: ${{ inputs.slot || '' }}
+          EVENT_SCHEDULE: ${{ github.event.schedule || '' }}
+        run: |
+          if [[ -n "$INPUT_BATCHES" ]]; then
+            echo "batches=$INPUT_BATCHES" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # 시간대 결정 (스케줄 -> 입력 -> UTC 기반 추정)
+          SLOT="$EVENT_SCHEDULE"
+          if [[ -n "$INPUT_SLOT" ]]; then
+            SLOT="$INPUT_SLOT"
+          fi
+
+          if [[ "$SLOT" == "0 0 * * *" ]]; then
+            TIME_SLOT="AM"
+          elif [[ "$SLOT" == "0 12 * * *" ]]; then
+            TIME_SLOT="PM"
+          elif [[ "$SLOT" =~ ^(AM|PM)$ ]]; then
+            TIME_SLOT="$SLOT"
+          else
+            hour=$(date -u +%H)
+            if (( hour < 12 )); then TIME_SLOT="AM"; else TIME_SLOT="PM"; fi
+          fi
+
+          DOW=$(date -u +%u) # 1=Mon
+          BATCHES=""
+          case "$DOW-$TIME_SLOT" in
+            "1-AM") BATCHES="batch1" ;;                        # Mon 09 KST
+            "1-PM") BATCHES="batch5" ;;                        # Mon 21 KST
+            "2-AM") BATCHES="batch2" ;;                        # Tue 09 KST
+            "2-PM") BATCHES="batch6" ;;                        # Tue 21 KST
+            "3-AM") BATCHES="batch3" ;;                        # Wed 09 KST
+            "3-PM") BATCHES="batch7" ;;                        # Wed 21 KST
+            "4-AM") BATCHES="batch4" ;;                        # Thu 09 KST
+            "4-PM") BATCHES="batch8,batch11" ;;                # Thu 21 KST
+            "5-AM") BATCHES="batch9" ;;                        # Fri 09 KST
+            "5-PM") BATCHES="batch10" ;;                       # Fri 21 KST
+            "6-AM") BATCHES="batch1" ;;                        # Sat 09 KST (재확인)
+            "6-PM") BATCHES="batch2" ;;                        # Sat 21 KST (재확인)
+            "7-AM") BATCHES="batch1" ;;                        # Sun 09 KST (재확인)
+            "7-PM") BATCHES="batch2" ;;                        # Sun 21 KST (재확인)
+          esac
+
+          echo "slot=$TIME_SLOT" >> "$GITHUB_OUTPUT"
+          echo "dow=$DOW" >> "$GITHUB_OUTPUT"
+          echo "batches=$BATCHES" >> "$GITHUB_OUTPUT"
+          if [[ -z "$BATCHES" ]]; then
+            echo "No batch scheduled for this slot" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Run batch updater
+        if: ${{ steps.plan.outputs.batches != '' }}
+        shell: bash
+        env:
+          BATCHES: ${{ steps.plan.outputs.batches }}
+          START_DATE: ${{ inputs.start_date || '' }}
+          SLEEP_SECONDS: ${{ inputs.sleep_seconds || '90' }}
+          SMART_UPDATE: ${{ inputs.smart_update }}
+          FORCE_RELOAD: ${{ inputs.force_reload }}
+        run: |
+          CMD="python us_eco/run_batch.py --batch-list \"$BATCHES\" --sleep-seconds $SLEEP_SECONDS --summary-file us_eco/.batch_summary.json"
+          if [[ "$SMART_UPDATE" == "false" ]]; then
+            CMD="$CMD --no-smart-update"
+          fi
+          if [[ "$FORCE_RELOAD" == "true" ]]; then
+            CMD="$CMD --force-reload"
+          fi
+          if [[ -n "$START_DATE" ]]; then
+            CMD="$CMD --start-date $START_DATE"
+          fi
+          echo "Running: $CMD"
+          bash -lc "$CMD"
+
+      - name: Show summary
+        if: ${{ steps.plan.outputs.batches != '' && always() }}
+        run: |
+          if [[ -f us_eco/.batch_summary.json ]]; then
+            echo "### Batch Summary" >> "$GITHUB_STEP_SUMMARY"
+            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+import json, pathlib, os
+summary_path = pathlib.Path("us_eco/.batch_summary.json")
+if summary_path.exists():
+    data = json.loads(summary_path.read_text(encoding="utf-8"))
+    print("| batch | module | ok | message |")
+    print("| --- | --- | --- | --- |")
+    for row in data:
+        print(f"| {row['batch']} | {row['module']} | {row['ok']} | {row['message']} |")
+PY
+          else
+            echo "요약 파일이 없습니다." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit and push changes
+        if: ${{ steps.plan.outputs.batches != '' }}
+        run: |
+          if [[ -z "$(git status --porcelain)" ]]; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git config --global user.email "actions@github.com"
+          git config --global user.name "github-actions[bot]"
+          git add .
+          ts=$(date -u +'%Y-%m-%d')
+          git commit -m "chore: auto-update us_eco (${ts}, ${BATCHES})"
+          git push origin HEAD:main
+        env:
+          BATCHES: ${{ steps.plan.outputs.batches }}
+
+      - name: Create/Update failure issue
+        if: ${{ failure() && steps.plan.outputs.batches != '' }}
+        uses: actions/github-script@v7
+        env:
+          BATCHES: ${{ steps.plan.outputs.batches }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const title = "us-eco auto-update failures";
+            const body = `배치 실행 실패
+            - batches: ${process.env.BATCHES}
+            - workflow: ${context.runNumber}
+            - logs: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'us-eco-auto-update'
+            });
+            const existing = issues.find(issue => issue.title === title);
+            if (existing) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                body
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: ['us-eco-auto-update']
+              });
+            }

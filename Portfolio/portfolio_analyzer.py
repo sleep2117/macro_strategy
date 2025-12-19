@@ -13,6 +13,19 @@ class PortfolioAnalyzer:
     Portfolio performance analyzer
     """
 
+    @staticmethod
+    def _flow_adjusted_returns(df: pd.DataFrame) -> pd.Series:
+        """
+        Compute daily returns excluding the impact of deposits/withdrawals.
+        Uses a simple cash-flow adjustment: 투자손익 divided by
+        (기초평가금액 + 0.5 * 순입금).
+        """
+        net_flow = df['입금액'] - df['출금액']
+        denom = df['기초평가금액'] + 0.5 * net_flow
+        denom = denom.replace(0, np.nan)
+        returns = (df['투자손익'] / denom) * 100
+        return returns.fillna(0)
+
     def __init__(self):
         """Initialize analyzer"""
         self.performance = data_loader.load_performance_history()
@@ -68,15 +81,8 @@ class PortfolioAnalyzer:
         if df.empty:
             return {}
 
-        # Calculate metrics
-        start_amount = df.iloc[0]['기초평가금액']
-        end_amount = df.iloc[-1]['기말평가금액']
-
-        # Daily returns (순수 투자손익만 반영)
-        daily_returns = (df['투자손익'] / df['기초평가금액']) * 100
-
-        # Total return (복리 계산, 입출금 영향 제거)
-        # 각 일의 수익률을 복리로 누적
+        # Flow-adjusted daily returns (exclude 입금/출금 영향)
+        daily_returns = self._flow_adjusted_returns(df)
         total_return = ((1 + daily_returns / 100).prod() - 1) * 100
 
         # 입출금 정보 (참고용)
@@ -137,11 +143,9 @@ class PortfolioAnalyzer:
         if df.empty:
             return df
 
-        # Calculate returns
-        df['daily_return'] = (df['투자손익'] / df['기초평가금액']) * 100
-
-        start_amount = df.iloc[0]['기초평가금액']
-        df['cumulative_return'] = ((df['기말평가금액'] - start_amount) / start_amount) * 100
+        # Flow-adjusted returns
+        df['daily_return'] = self._flow_adjusted_returns(df)
+        df['cumulative_return'] = ((1 + df['daily_return'] / 100).cumprod() - 1) * 100
 
         return df[['일자', '기말평가금액', 'daily_return', 'cumulative_return']]
 
@@ -251,8 +255,10 @@ class PortfolioAnalyzer:
             '투자손익': 'sum'
         })
 
-        # Calculate monthly return
-        monthly['월간수익률'] = ((monthly['기말평가금액'] - monthly['기초평가금액']) / monthly['기초평가금액']) * 100
+        # Flow-adjusted monthly return
+        monthly['순입금'] = monthly['입금액'] - monthly['출금액']
+        monthly['월간수익률'] = ((monthly['기말평가금액'] - monthly['기초평가금액'] - monthly['순입금']) /
+                               (monthly['기초평가금액'] + 0.5 * monthly['순입금'])) * 100
 
         return monthly
 

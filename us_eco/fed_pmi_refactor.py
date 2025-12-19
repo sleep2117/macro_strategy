@@ -628,6 +628,19 @@ def load_all_fed_pmi_data_enhanced(start_date='2020-01-01', force_reload=False, 
         print(traceback.format_exc())
         return False
 
+
+
+def load_fed_pmi_data(start_date='2020-01-01', smart_update=True, force_reload=False, enabled_banks=None):
+    """
+    Thin wrapper so the dashboard detects the correct loader function.
+    """
+    return load_all_fed_pmi_data_enhanced(
+        start_date=start_date,
+        force_reload=force_reload,
+        smart_update=smart_update,
+        enabled_banks=enabled_banks,
+    )
+
 def print_load_info():
     """로드 정보 출력"""
     info = FED_PMI_DATA['load_info']

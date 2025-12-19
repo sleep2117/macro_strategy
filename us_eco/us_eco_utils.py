@@ -57,13 +57,13 @@ class APIConfig:
     
     def __init__(self):
         # BLS API 키들 (기본값 - 각 파일에서 덮어쓸 수 있음)
-        self.BLS_API_KEY = '56b193612b614cdc9416359fd1c73a74'
-        self.BLS_API_KEY2 = '0450ef37363c48b5bedd2ae6fc92dd6e'
-        self.BLS_API_KEY3 = 'daf1ca7970b74e81b6a5c7a80a8b8a7f'
+        self.BLS_API_KEY = os.getenv('BLS_API_KEY_1', '56b193612b614cdc9416359fd1c73a74')
+        self.BLS_API_KEY2 = os.getenv('BLS_API_KEY_2', '0450ef37363c48b5bedd2ae6fc92dd6e')
+        self.BLS_API_KEY3 = os.getenv('BLS_API_KEY_3', 'daf1ca7970b74e81b6a5c7a80a8b8a7f')
         self.CURRENT_BLS_KEY = self.BLS_API_KEY
         
         # FRED API 키 (기본값 - 각 파일에서 덮어쓸 수 있음)
-        self.FRED_API_KEY = 'f4bd434811e42e42287a0e5ccf400fff'
+        self.FRED_API_KEY = os.getenv('FRED_API_KEY', 'f4bd434811e42e42287a0e5ccf400fff')
         
         # 세션 객체들
         self.BLS_SESSION = None

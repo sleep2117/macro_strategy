@@ -20,6 +20,7 @@ left_ytitle, right_ytitle에는 단위가 들어감
 """
 
 import warnings
+from typing import Iterable, Optional
 import plotly.express as px
 warnings.filterwarnings("ignore")
 
@@ -78,7 +79,7 @@ grey_pds = "rgb(114,113,113)"
 KPDS_COLORS = [deepred_pds, deepblue_pds, beige_pds, blue_pds, grey_pds]
 
 
-def _parse_color_to_rgb_tuple(color: str | None):
+def _parse_color_to_rgb_tuple(color: Optional[str]):
     if not color:
         return None
     value = str(color).strip()
@@ -130,7 +131,7 @@ for base_color in KPDS_COLORS:
         _KPDS_COLOR_TUPLES.add(parsed)
 
 
-def _add_colors_from_palette(palette: list[str] | tuple[str, ...]) -> None:
+def _add_colors_from_palette(palette: Iterable[str]) -> None:
     for colour in palette:
         rgb_tuple = _parse_color_to_rgb_tuple(colour)
         if rgb_tuple and rgb_tuple not in _KPDS_COLOR_TUPLES:
@@ -478,7 +479,6 @@ def df_line_chart(df, column=None, title=None, xtitle=None, ytitle=None, label=N
             margin=margins
         )
     
-    fig.show()
     return fig
 
 def df_multi_line_chart(df, columns=None, title=None, xtitle=None, ytitle=None, labels=None, 
@@ -588,7 +588,6 @@ def df_multi_line_chart(df, columns=None, title=None, xtitle=None, ytitle=None, 
             margin=margins
         )
     
-    fig.show()
     return fig
 
 def df_historical_comparison(df, current_col=None, min_col=None, max_col=None, avg_col=None,
@@ -766,7 +765,6 @@ def df_historical_comparison(df, current_col=None, min_col=None, max_col=None, a
             margin=margins
         )
     
-    fig.show()
     return fig
 
 def create_five_year_comparison_chart(df, title=None, y_title=None, x_axis_type='month', recent_years=3):
@@ -963,7 +961,6 @@ def create_five_year_comparison_chart(df, title=None, y_title=None, x_axis_type=
             align='left'
         )
     
-    fig.show()
     return fig
 
 def df_dual_axis_chart(df, left_cols=None, right_cols=None, 
@@ -1143,7 +1140,6 @@ def df_dual_axis_chart(df, left_cols=None, right_cols=None,
             align='left'
         )
     
-    fig.show()
     return fig
 
 # 산점도 차트도 추가
@@ -1249,7 +1245,6 @@ def df_scatter_chart(df, x_col=None, y_col=None, color_col=None, size_col=None,
         margin=dict(l=60, r=150, t=80, b=60)
     )
     
-    fig.show()
     return fig
 
 # 편의 함수들 - 호환성 유지
@@ -1418,7 +1413,6 @@ def df_bar_chart(df, column=None, title=None, xtitle=None, ytitle=None,
             margin=margins
         )
     
-    fig.show()
     return fig
 
 def create_flexible_mixed_chart(df, line_config=None, bar_config=None, 
@@ -1697,7 +1691,6 @@ def create_flexible_mixed_chart(df, line_config=None, bar_config=None,
         else:
             fig.add_hline(y=0, line_width=1, line_color="black", opacity=0.5)
     
-    fig.show()
     return fig
 
 def create_sector_contribution_chart(data_dict, title=None, y_title="천명",
@@ -1811,7 +1804,6 @@ def create_sector_contribution_chart(data_dict, title=None, y_title="천명",
             align='left'
         )
     
-    fig.show()
     return fig
 
 def create_kpds_cpi_bar_chart(data_dict, labels_dict=None, title=None, 
@@ -1911,7 +1903,6 @@ def create_kpds_cpi_bar_chart(data_dict, labels_dict=None, title=None,
     fig.update_xaxes(showgrid=False)
     fig.add_hline(y=0, line_width=2, line_color="black")
     
-    fig.show()
     return fig
 
 def create_waterfall_chart(df, column=None, title=None, xtitle=None, ytitle=None,
@@ -1991,7 +1982,6 @@ def create_waterfall_chart(df, column=None, title=None, xtitle=None, ytitle=None
     # 0선 추가
     fig.add_hline(y=0, line_width=1, line_color="black", opacity=0.8)
     
-    fig.show()
     return fig
 
 def create_horizontal_bar_chart(data_dict, title=None, positive_color=None, negative_color=None, 
@@ -2107,5 +2097,4 @@ def create_horizontal_bar_chart(data_dict, title=None, positive_color=None, nega
     fig.update_yaxes(showgrid=False)
     fig.add_vline(x=0, line_width=2, line_color="black")
     
-    fig.show()
     return fig
