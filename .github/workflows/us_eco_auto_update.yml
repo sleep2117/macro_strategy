@@ -30,7 +30,9 @@ on:
 jobs:
   update:
     runs-on: ubuntu-latest
-    concurrency: us-eco-update
+    concurrency:
+      group: data-update
+      cancel-in-progress: false
     defaults:
       run:
         working-directory: macro_strategy
@@ -137,21 +139,24 @@ jobs:
           if [[ -f us_eco/.batch_summary.json ]]; then
             echo "### Batch Summary" >> "$GITHUB_STEP_SUMMARY"
             python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
-import json, pathlib, os
-summary_path = pathlib.Path("us_eco/.batch_summary.json")
-if summary_path.exists():
-    data = json.loads(summary_path.read_text(encoding="utf-8"))
-    print("| batch | module | ok | message |")
-    print("| --- | --- | --- | --- |")
-    for row in data:
-        print(f"| {row['batch']} | {row['module']} | {row['ok']} | {row['message']} |")
-PY
+          import json, pathlib
+          summary_path = pathlib.Path("us_eco/.batch_summary.json")
+          if summary_path.exists():
+              data = json.loads(summary_path.read_text(encoding="utf-8"))
+              print("| batch | module | ok | message |")
+              print("| --- | --- | --- | --- |")
+              for row in data:
+                  print(f"| {row['batch']} | {row['module']} | {row['ok']} | {row['message']} |")
+          PY
           else
-            echo "요약 파일이 없습니다." >> "$GITHUB_STEP_SUMMARY"
+            echo "Summary file not found." >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Commit and push changes
         if: ${{ steps.plan.outputs.batches != '' }}
         run: |
+          git fetch origin main
+          git pull --rebase origin main
           if [[ -z "$(git status --porcelain)" ]]; then
             echo "No changes to commit."
             exit 0
@@ -161,7 +166,12 @@ PY
           git add .
           ts=$(date -u +'%Y-%m-%d')
           git commit -m "chore: auto-update us_eco (${ts}, ${BATCHES})"
-          git push origin HEAD:main
+          for i in 1 2 3; do
+            if git push origin HEAD:main; then
+              break
+            fi
+            git pull --rebase origin main
+          done
         env:
           BATCHES: ${{ steps.plan.outputs.batches }}
 

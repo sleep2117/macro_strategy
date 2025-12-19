@@ -8,6 +8,9 @@ on:
 jobs:
   update:
     runs-on: ubuntu-latest
+    concurrency:
+      group: data-update
+      cancel-in-progress: false
     permissions:
       contents: write
 
@@ -37,10 +40,17 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git pull --rebase origin main
           if [[ -n "$(git status --porcelain)" ]]; then
             git add .
             git commit -m "chore: automated data update"
-            git push
+            for i in 1 2 3; do
+              if git push origin HEAD:main; then
+                break
+              fi
+              git pull --rebase origin main
+            done
           else
             echo "No changes to commit."
           fi

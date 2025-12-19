@@ -26,7 +26,7 @@ NYFED_BASE_URL = "https://markets.newyorkfed.org/api"
 DEFAULT_START = date(2018, 1, 1)
 DEFAULT_END: date | None = None
 MATURITY_BUCKETS = [(0, 1), (1, 3), (3, 5), (5, 7), (7, 10), (10, 20), (20, 200)]
-EXPORT_DIR = Path(__file__).resolve().parent / "data_exports"
+DATA_DIR = Path(__file__).resolve().parent
 
 SERIES: Dict[str, Dict[str, Any]] = {
     "walcl": {"id": "WALCL", "label": "Fed balance sheet (WALCL)", "unit": "millions"},
@@ -107,11 +107,29 @@ def _as_date_string(value: date | datetime | str | None) -> str | None:
 
 def _export_csv(df: pd.DataFrame, filename: str) -> None:
     try:
-        EXPORT_DIR.mkdir(parents=True, exist_ok=True)
-        df.to_csv(EXPORT_DIR / filename)
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        df.to_csv(DATA_DIR / filename)
     except OSError:
         # Silent fail to keep UI responsive
         pass
+
+
+def _load_csv_if_exists(
+    filename: str,
+    index_col: int | None = 0,
+    parse_dates: bool = True,
+) -> pd.DataFrame | None:
+    path = DATA_DIR / filename
+    if not path.exists():
+        return None
+    try:
+        df = pd.read_csv(path, index_col=index_col)
+    except OSError:
+        return None
+    if parse_dates and index_col is not None:
+        df.index = pd.to_datetime(df.index, errors="coerce")
+        df = df.sort_index()
+    return df
 
 
 def _to_trillions(series: pd.Series, unit: str) -> pd.Series:
@@ -126,6 +144,23 @@ def _to_trillions(series: pd.Series, unit: str) -> pd.Series:
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_fred_series(key: str, cfg: Dict[str, Any], start_date: date | datetime | None) -> pd.DataFrame:
+    cache_name = f"fred_{cfg['id']}.csv"
+    cached = _load_csv_if_exists(cache_name)
+    if cached is not None:
+        cached = cached.copy()
+        if key not in cached.columns:
+            if cfg["id"] in cached.columns:
+                cached = cached.rename(columns={cfg["id"]: key})
+            elif len(cached.columns) == 1:
+                cached = cached.rename(columns={cached.columns[0]: key})
+            else:
+                cached[key] = pd.NA
+        if key in cached.columns:
+            cached[key] = pd.to_numeric(cached[key], errors="coerce")
+        if start_date:
+            cached = cached.loc[cached.index >= pd.to_datetime(start_date)]
+        return cached[[key]]
+
     params = {"id": cfg["id"]}
     start_as_str = _as_date_string(start_date)
     if start_as_str:
@@ -148,7 +183,10 @@ def fetch_fred_series(key: str, cfg: Dict[str, Any], start_date: date | datetime
     df = df.rename(columns={cfg["id"]: key, date_col: "DATE"})
     df[key] = pd.to_numeric(df[key], errors="coerce")
     df = df.set_index("DATE").sort_index()
-    return df[[key]]
+    result = df[[key]]
+    if not result.empty:
+        _export_csv(result, cache_name)
+    return result
 
 
 @st.cache_data(ttl=1800, show_spinner=False)
@@ -191,10 +229,42 @@ def fetch_nyfed_reference_rates(
     end_date: date | datetime | None,
 ) -> pd.DataFrame:
     segment = "secured" if secured else "unsecured"
-    path = f"{NYFED_BASE_URL}/rates/{segment}/{ratetype}/search.json"
-    params: Dict[str, str] = {}
+    cache_name = f"nyfed_rates_{segment}_{ratetype}.csv"
     start_str = _as_date_string(start_date)
     end_str = _as_date_string(end_date)
+    cached = _load_csv_if_exists(cache_name)
+    if cached is not None:
+        df = cached.copy()
+        if "effectiveDate" in df.columns:
+            df["effectiveDate"] = pd.to_datetime(df["effectiveDate"], errors="coerce")
+            df = df.set_index("effectiveDate").sort_index()
+        rename_map = {
+            "percentRate": "rate",
+            "volumeInBillions": "volume_billions",
+            "type": "type",
+        }
+        for src, dst in rename_map.items():
+            if src in df.columns and dst not in df.columns:
+                df = df.rename(columns={src: dst})
+        if start_str:
+            df = df.loc[df.index >= pd.to_datetime(start_str)]
+        if end_str:
+            df = df.loc[df.index <= pd.to_datetime(end_str)]
+        numeric_cols = [
+            "rate",
+            "volume_billions",
+            "percentPercentile1",
+            "percentPercentile25",
+            "percentPercentile75",
+            "percentPercentile99",
+        ]
+        for col in numeric_cols:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+        return df
+
+    path = f"{NYFED_BASE_URL}/rates/{segment}/{ratetype}/search.json"
+    params: Dict[str, str] = {}
     if start_str:
         params["startdate"] = start_str
     if end_str:
@@ -224,6 +294,8 @@ def fetch_nyfed_reference_rates(
     for col in numeric_cols:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
+    if not df.empty:
+        _export_csv(df, cache_name)
     return df
 
 
@@ -248,6 +320,21 @@ def load_nyfed_reference_rates(
 
 @st.cache_data(ttl=900, show_spinner=False)
 def fetch_repo_operations(operation_type: str, last_n: int) -> pd.DataFrame:
+    cache_name = f"repo_ops_{operation_type}_{last_n}.csv"
+    cached = _load_csv_if_exists(cache_name, index_col=None, parse_dates=False)
+    if cached is not None:
+        df = cached.copy()
+        if "operationDate" in df.columns:
+            df["operationDate"] = pd.to_datetime(df["operationDate"], errors="coerce")
+        if "maturityDate" in df.columns:
+            df["maturityDate"] = pd.to_datetime(df["maturityDate"], errors="coerce")
+        if "operation_type" not in df.columns:
+            df["operation_type"] = operation_type
+        for col in ["totalAmtAccepted", "totalAmtSubmitted", "operationLimit"]:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+        return df.sort_values("operationDate") if "operationDate" in df.columns else df
+
     path = f"{NYFED_BASE_URL}/rp/{operation_type}/all/results/last/{last_n}.json"
     resp = requests.get(path, timeout=20)
     resp.raise_for_status()
@@ -263,7 +350,10 @@ def fetch_repo_operations(operation_type: str, last_n: int) -> pd.DataFrame:
     for col in ["totalAmtAccepted", "totalAmtSubmitted", "operationLimit"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
-    return df.sort_values("operationDate")
+    df = df.sort_values("operationDate")
+    if not df.empty:
+        _export_csv(df, cache_name)
+    return df
 
 
 @st.cache_data(ttl=900, show_spinner=False)
@@ -279,6 +369,39 @@ def load_repo_operations(last_n: int) -> Dict[str, pd.DataFrame]:
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def fetch_soma_summary() -> pd.DataFrame:
+    cache_name = "soma_summary.csv"
+    cached = _load_csv_if_exists(cache_name)
+    if cached is not None:
+        df = cached.copy()
+        if "asOfDate" in df.columns:
+            df["asOfDate"] = pd.to_datetime(df["asOfDate"], errors="coerce")
+            df = df.set_index("asOfDate").sort_index()
+        numeric_cols = [
+            "mbs",
+            "cmbs",
+            "tips",
+            "frn",
+            "tipsInflationCompensation",
+            "notesbonds",
+            "bills",
+            "agencies",
+            "total",
+        ]
+        for col in numeric_cols:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+        if "ust_total" not in df.columns:
+            df["ust_total"] = (
+                df.get("notesbonds", 0)
+                + df.get("bills", 0)
+                + df.get("tips", 0)
+                + df.get("frn", 0)
+                + df.get("tipsInflationCompensation", 0)
+            )
+        if "mbs_total" not in df.columns:
+            df["mbs_total"] = df.get("mbs", 0) + df.get("cmbs", 0)
+        return df
+
     path = f"{NYFED_BASE_URL}/soma/summary.json"
     resp = requests.get(path, timeout=20)
     resp.raise_for_status()
@@ -306,12 +429,26 @@ def fetch_soma_summary() -> pd.DataFrame:
     df["ust_total"] = df.get("notesbonds", 0) + df.get("bills", 0) + df.get("tips", 0) + df.get("frn", 0) + df.get("tipsInflationCompensation", 0)
     df["mbs_total"] = df.get("mbs", 0) + df.get("cmbs", 0)
     df = df.sort_values("asOfDate").set_index("asOfDate")
+    if not df.empty:
+        _export_csv(df, cache_name)
     return df
 
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def fetch_soma_tsy_details(as_of: str) -> pd.DataFrame:
     """Fetch SOMA Treasury holdings (all types) for a given as-of date."""
+    cache_name = f"soma_tsy_detail_{as_of}.csv"
+    cached = _load_csv_if_exists(cache_name, index_col=None, parse_dates=False)
+    if cached is not None:
+        df = cached.copy()
+        for col in ["asOfDate", "maturityDate"]:
+            if col in df.columns:
+                df[col] = pd.to_datetime(df[col], errors="coerce")
+        for col in ["parValue", "inflationCompensation", "changeFromPriorWeek", "changeFromPriorYear", "percentOutstanding"]:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+        return df
+
     path = f"{NYFED_BASE_URL}/soma/tsy/get/asof/{as_of}.json"
     resp = requests.get(path, timeout=20)
     resp.raise_for_status()
@@ -327,6 +464,8 @@ def fetch_soma_tsy_details(as_of: str) -> pd.DataFrame:
     for col in ["parValue", "inflationCompensation", "changeFromPriorWeek", "changeFromPriorYear", "percentOutstanding"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
+    if not df.empty:
+        _export_csv(df, cache_name)
     return df
 
 
@@ -360,6 +499,14 @@ def _weighted_average_maturity_years(df: pd.DataFrame) -> float:
 @st.cache_data(ttl=86400, show_spinner=False)
 def fetch_soma_tsy_monthly() -> pd.DataFrame:
     """Fetch monthly Treasury holdings (CUSIP-level) and aggregate to maturity buckets per as-of date."""
+    cache_name = "soma_tsy_monthly_buckets.csv"
+    cached = _load_csv_if_exists(cache_name)
+    if cached is not None:
+        df = cached.copy()
+        for col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+        return df
+
     path = f"{NYFED_BASE_URL}/soma/tsy/get/monthly.json"
     resp = requests.get(path, timeout=30)
     resp.raise_for_status()
@@ -382,12 +529,26 @@ def fetch_soma_tsy_monthly() -> pd.DataFrame:
     labels = ["0-1Y", "1-3Y", "3-5Y", "5-7Y", "7-10Y", "10-20Y", "20+Y"]
     df["bucket"] = pd.cut(df["years_to_maturity"], bins=bins, labels=labels, right=False)
     grouped = df.groupby(["asOfDate", "bucket"])["parValue"].sum().unstack("bucket").sort_index()
+    if not grouped.empty:
+        _export_csv(grouped, cache_name)
     return grouped
 
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def fetch_soma_tsy_wam_series() -> pd.Series:
     """Compute weighted average maturity (years) by as-of date using monthly SOMA Treasury detail."""
+    cache_name = "soma_tsy_wam.csv"
+    cached = _load_csv_if_exists(cache_name)
+    if cached is not None:
+        df = cached.copy()
+        if "wam_years" in df.columns:
+            series = df["wam_years"]
+        else:
+            series = df.iloc[:, 0] if not df.empty else pd.Series(dtype=float)
+        series = pd.to_numeric(series, errors="coerce")
+        series.name = "wam_years"
+        return series
+
     path = f"{NYFED_BASE_URL}/soma/tsy/get/monthly.json"
     resp = requests.get(path, timeout=30)
     resp.raise_for_status()
@@ -408,12 +569,27 @@ def fetch_soma_tsy_wam_series() -> pd.Series:
     grouped = df.groupby("asOfDate")
     wam = grouped.apply(lambda g: (g["parValue"] * g["years_to_maturity"]).sum() / g["parValue"].sum())
     wam = wam.groupby(pd.Grouper(freq="MS")).mean().sort_index()
+    if not wam.empty:
+        _export_csv(wam.to_frame("wam_years"), cache_name)
     return wam
 
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def fetch_reserve_demand_elasticity() -> pd.DataFrame:
     """Download Reserve Demand Elasticity Excel and return tidy DataFrame."""
+    cache_name = "reserve_demand_elasticity.csv"
+    cached = _load_csv_if_exists(cache_name)
+    if cached is not None:
+        df = cached.copy()
+        if "date" in df.columns:
+            df["date"] = pd.to_datetime(df["date"], errors="coerce")
+            df = df.set_index("date").sort_index()
+        num_cols = ["p50", "p2_5", "p97_5", "p16", "p84"]
+        for col in num_cols:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+        return df[num_cols] if set(num_cols).issubset(df.columns) else df
+
     url = "https://www.newyorkfed.org/medialibrary/Research/Interactives/Data/elasticity/download-data"
     resp = requests.get(url, timeout=30)
     resp.raise_for_status()
@@ -437,7 +613,10 @@ def fetch_reserve_demand_elasticity() -> pd.DataFrame:
     for col in num_cols:
         df[col] = pd.to_numeric(df[col], errors="coerce")
     df = df.set_index("date").sort_index()
-    return df[num_cols]
+    result = df[num_cols]
+    if not result.empty:
+        _export_csv(result, cache_name)
+    return result
 
 
 def _extract_srf_usage(combined: pd.DataFrame) -> pd.DataFrame:
@@ -1009,6 +1188,20 @@ def render_money_market_complex(df: pd.DataFrame) -> None:
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_fcig_series(start_date: date | datetime) -> pd.DataFrame:
+    cache_name = "fci_g.csv"
+    cached = _load_csv_if_exists(cache_name)
+    if cached is not None:
+        df = cached.copy()
+        if "date" in df.columns:
+            df["date"] = pd.to_datetime(df["date"], errors="coerce")
+            df = df.set_index("date").sort_index()
+        if "FCI-G" not in df.columns and "FCI-G Index (baseline)" in df.columns:
+            df = df.rename(columns={"FCI-G Index (baseline)": "FCI-G"})
+        if "FCI-G" in df.columns:
+            df["FCI-G"] = pd.to_numeric(df["FCI-G"], errors="coerce")
+        df = df.loc[df.index >= pd.to_datetime(start_date)]
+        return df
+
     url = "https://www.federalreserve.gov/econres/notes/feds-notes/fci_g_public_monthly_3yr.csv"
     resp = requests.get(url, timeout=20)
     resp.raise_for_status()
@@ -1019,12 +1212,28 @@ def fetch_fcig_series(start_date: date | datetime) -> pd.DataFrame:
     df = df.set_index("date").sort_index()
     df = df.rename(columns={"FCI-G Index (baseline)": "FCI-G"})
     df = df.loc[df.index >= pd.to_datetime(start_date)]
-    _export_csv(df, "fci_g.csv")
+    _export_csv(df, cache_name)
     return df
 
 
 @st.cache_data(ttl=1800, show_spinner=False)
 def fetch_fred_generic(series_id: str, key: str, start_date: date | datetime) -> pd.DataFrame:
+    cache_name = f"fred_{series_id}.csv"
+    cached = _load_csv_if_exists(cache_name)
+    if cached is not None:
+        df = cached.copy()
+        if key not in df.columns:
+            if series_id in df.columns:
+                df = df.rename(columns={series_id: key})
+            elif len(df.columns) == 1:
+                df = df.rename(columns={df.columns[0]: key})
+            else:
+                df[key] = pd.NA
+        if key in df.columns:
+            df[key] = pd.to_numeric(df[key], errors="coerce")
+        df = df.loc[df.index >= pd.to_datetime(start_date)]
+        return df[[key]]
+
     params = {"id": series_id}
     start_as_str = _as_date_string(start_date)
     if start_as_str:
@@ -1042,7 +1251,10 @@ def fetch_fred_generic(series_id: str, key: str, start_date: date | datetime) ->
     df = df.rename(columns={series_id: key, date_col: "DATE"})
     df[key] = pd.to_numeric(df[key], errors="coerce")
     df = df.set_index("DATE").sort_index()
-    return df[[key]]
+    result = df[[key]]
+    if not result.empty:
+        _export_csv(result, cache_name)
+    return result
 
 
 @st.cache_data(ttl=1800, show_spinner=False)
