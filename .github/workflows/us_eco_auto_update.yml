@@ -138,7 +138,7 @@ jobs:
         run: |
           if [[ -f us_eco/.batch_summary.json ]]; then
             echo "### Batch Summary" >> "$GITHUB_STEP_SUMMARY"
-            python -c 'import json, pathlib; p=pathlib.Path("us_eco/.batch_summary.json"); data=json.loads(p.read_text(encoding="utf-8")); print("| batch | module | ok | message |"); print("| --- | --- | --- | --- |"); [print(f"| {r[\"batch\"]} | {r[\"module\"]} | {r[\"ok\"]} | {r[\"message\"]} |") for r in data]' >> "$GITHUB_STEP_SUMMARY"
+            python -c "import json, pathlib; p=pathlib.Path('us_eco/.batch_summary.json'); data=json.loads(p.read_text(encoding='utf-8')); print('| batch | module | ok | message |'); print('| --- | --- | --- | --- |'); [print('| {} | {} | {} | {} |'.format(r['batch'], r['module'], r['ok'], r['message'])) for r in data]" >> "$GITHUB_STEP_SUMMARY"
           else
             echo "Summary file not found." >> "$GITHUB_STEP_SUMMARY"
           fi
