@@ -5,3 +5,4 @@ requests>=2.32
 pykrx>=1.0.51
 matplotlib>=3.8
 sdmxthon>=0.1.5
+plotly>=5.22
