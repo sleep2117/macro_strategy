@@ -1,19 +1,19 @@
 [
   {
-    "batch": "batch6",
-    "module": "industrial_production_refactor",
+    "batch": "batch7",
+    "module": "house_price_refactor",
     "ok": true,
     "message": "성공"
   },
   {
-    "batch": "batch6",
-    "module": "construction_spending_refactor",
+    "batch": "batch7",
+    "module": "house_sales_stock_refactor",
     "ok": true,
     "message": "성공"
   },
   {
-    "batch": "batch6",
-    "module": "new_residential_construction_refactor",
+    "batch": "batch7",
+    "module": "realtor_housing_inventory_refactor",
     "ok": true,
     "message": "성공"
   }
