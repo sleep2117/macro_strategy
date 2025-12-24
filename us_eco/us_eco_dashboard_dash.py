@@ -13,6 +13,7 @@ from typing import Any
 
 import pandas as pd
 import plotly.graph_objects as go
+import plotly.express as px
 
 import dash
 from dash import dcc, html, dash_table, Input, Output, State, no_update
@@ -1331,6 +1332,74 @@ def _collect_selected_infos(
     return infos
 
 
+
+def _build_long_dataframe(selected_infos: list[dict[str, Any]], dtype_key: str) -> pd.DataFrame:
+    frames: list[pd.DataFrame] = []
+    for info in selected_infos:
+        meta = info["meta"]
+        data_dict = meta.get("data_dict") or ensure_module_data(meta)
+        if not _data_dict_ready(data_dict):
+            continue
+        source_df = data_dict.get(dtype_key)
+        if not isinstance(source_df, pd.DataFrame):
+            continue
+        series_name = info["series_name"]
+        if series_name not in source_df.columns:
+            continue
+        series_data = pd.to_numeric(source_df[series_name], errors="coerce")
+        index = source_df.index
+        if not isinstance(index, pd.DatetimeIndex):
+            index = pd.to_datetime(index, errors="coerce")
+        frame = pd.DataFrame(
+            {
+                "date": index,
+                "value": series_data.values,
+                "series": series_name,
+                "series_label": info.get("series_label", series_name),
+                "display_label": info.get("display_label", series_name),
+                "module": info.get("module_label", info.get("stem", "")),
+                "category": info.get("category", ""),
+                "data_type": dtype_key.replace("_data", ""),
+                "unit": info.get("unit", ""),
+            }
+        )
+        frames.append(frame)
+    if not frames:
+        return pd.DataFrame()
+    combined = pd.concat(frames, ignore_index=True)
+    combined = combined.dropna(subset=["date"])
+    return combined
+
+
+def _bi_field_panel(df: pd.DataFrame) -> html.Div:
+    if df is None or df.empty:
+        return html.Div("No fields available.")
+    rows = [{"field": col, "dtype": str(df[col].dtype)} for col in df.columns]
+    return html.Div(
+        dash_table.DataTable(
+            data=rows,
+            columns=[
+                {"name": "Field", "id": "field"},
+                {"name": "Type", "id": "dtype"},
+            ],
+            page_size=10,
+            style_table={"overflowY": "auto", "maxHeight": "260px"},
+            style_cell={"textAlign": "left", "padding": "6px"},
+            style_header={"fontWeight": "600"},
+        )
+    )
+
+
+def _bi_field_options(df: pd.DataFrame) -> tuple[list[str], list[str]]:
+    if df is None or df.empty:
+        return [], []
+    fields = [col for col in df.columns]
+    numeric_fields = [
+        col for col in fields if pd.api.types.is_numeric_dtype(df[col])
+    ]
+    return fields, numeric_fields
+
+
 def _build_table_rows(
     selected_infos: list[dict[str, Any]],
     settings: dict[str, dict[str, str]] | None,
@@ -1680,6 +1749,11 @@ for info in MODULE_INFOS:
 
 SERIES_REGISTRY, DEFAULT_SERIES_SELECTION = build_series_registry(MODULE_METAS)
 SERIES_OPTIONS = _series_options_from_registry(SERIES_REGISTRY)
+BI_MODULE_OPTIONS = [
+    {"label": meta.get("friendly_title", meta.get("stem", "")), "value": meta.get("stem", "")}
+    for meta in MODULE_METAS
+    if meta.get("stem")
+]
 PRESET_CACHE: dict[str, Any] = load_dashboard_presets()
 
 
@@ -1829,6 +1903,69 @@ app.layout = html.Div(
                         ),
                         html.Button("Save", id="preset-save-btn", className="btn btn-primary"),
                         html.Div(id="preset-message", className="preset-message"),
+                        html.Hr(className="divider"),
+                        html.Div("BI Builder", className="card-title"),
+                        html.Label("BI modules"),
+                        dcc.Dropdown(
+                            id="bi-module-select",
+                            options=BI_MODULE_OPTIONS,
+                            value=[DEFAULT_MODULE_FOR_SELECTION] if DEFAULT_MODULE_FOR_SELECTION else [],
+                            multi=True,
+                            placeholder="Select modules",
+                        ),
+                        html.Label("BI series", style={"marginTop": "10px"}),
+                        dcc.Dropdown(
+                            id="bi-series-select",
+                            options=[],
+                            value=[],
+                            multi=True,
+                            placeholder="Select series",
+                        ),
+                        html.Label("BI data type", style={"marginTop": "10px"}),
+                        dcc.Dropdown(
+                            id="bi-dtype-select",
+                            options=[
+                                {"label": label, "value": key} for key, label in STANDARD_DATA_KEYS
+                            ],
+                            value="raw_data",
+                            clearable=False,
+                        ),
+                        html.Label("Lookback (months)", style={"marginTop": "10px"}),
+                        dcc.Slider(
+                            id="bi-lookback",
+                            min=6,
+                            max=120,
+                            step=6,
+                            value=60,
+                            marks={i: str(i) for i in range(12, 121, 12)},
+                        ),
+                        html.Label("BI chart", style={"marginTop": "10px"}),
+                        dcc.Dropdown(
+                            id="bi-chart-type",
+                            options=[
+                                {"label": "Line", "value": "line"},
+                                {"label": "Bar", "value": "bar"},
+                                {"label": "Scatter", "value": "scatter"},
+                                {"label": "Area", "value": "area"},
+                                {"label": "Box", "value": "box"},
+                            ],
+                            value="line",
+                            clearable=False,
+                        ),
+                        html.Label("Aggregation", style={"marginTop": "10px"}),
+                        dcc.Dropdown(
+                            id="bi-agg",
+                            options=[
+                                {"label": "None", "value": "none"},
+                                {"label": "Mean", "value": "mean"},
+                                {"label": "Sum", "value": "sum"},
+                                {"label": "Median", "value": "median"},
+                                {"label": "Last", "value": "last"},
+                            ],
+                            value="none",
+                            clearable=False,
+                        ),
+
                     ],
                 ),
                 html.Div(
@@ -2139,6 +2276,77 @@ app.layout = html.Div(
                                         ),
                                         dash_table.DataTable(
                                             id="data-table",
+                                            data=[],
+                                            columns=[],
+                                            page_size=10,
+                                            style_table={
+                                                "overflowX": "auto",
+                                                "height": "240px",
+                                                "overflowY": "auto",
+                                            },
+                                            style_cell={
+                                                "textAlign": "left",
+                                                "padding": "6px",
+                                                "minWidth": "90px",
+                                            },
+                                            style_data_conditional=[
+                                                {"if": {"row_index": "odd"}, "backgroundColor": "#f6f2ea"}
+                                            ],
+                                            style_header={
+                                                "fontWeight": "600",
+                                                "backgroundColor": "#efe9dd",
+                                            },
+                                        ),
+                                    ],
+                                ),
+                            ],
+                        ),
+                        html.Div(
+                            className="card bi-card",
+                            children=[
+                                html.Div("BI Builder", className="card-title"),
+                                html.Div(id="bi-status", className="status-message"),
+                                html.Div(
+                                    className="bi-layout",
+                                    style={"display": "grid", "gridTemplateColumns": "1fr 1fr", "gap": "16px"},
+                                    children=[
+                                        html.Div(
+                                            className="bi-field-panel",
+                                            children=[
+                                                html.Div("Field panel", className="card-title"),
+                                                html.Div(id="bi-field-panel"),
+                                            ],
+                                        ),
+                                        html.Div(
+                                            className="bi-drop-panel",
+                                            children=[
+                                                html.Div("Drop zones", className="card-title"),
+                                                html.Label("X"),
+                                                dcc.Dropdown(id="bi-x", options=[], value=None, clearable=False),
+                                                html.Label("Y", style={"marginTop": "8px"}),
+                                                dcc.Dropdown(id="bi-y", options=[], value=None, clearable=False),
+                                                html.Label("Color", style={"marginTop": "8px"}),
+                                                dcc.Dropdown(id="bi-color", options=[], value=None, clearable=True),
+                                                html.Label("Size", style={"marginTop": "8px"}),
+                                                dcc.Dropdown(id="bi-size", options=[], value=None, clearable=True),
+                                                html.Label("Facet row", style={"marginTop": "8px"}),
+                                                dcc.Dropdown(id="bi-facet-row", options=[], value=None, clearable=True),
+                                                html.Label("Facet col", style={"marginTop": "8px"}),
+                                                dcc.Dropdown(id="bi-facet-col", options=[], value=None, clearable=True),
+                                            ],
+                                        ),
+                                    ],
+                                ),
+                                dcc.Graph(
+                                    id="bi-chart",
+                                    config={"displaylogo": False},
+                                ),
+                                html.Details(
+                                    open=False,
+                                    children=[
+                                        html.Summary("BI data preview", className="card-title"),
+                                        dash_table.DataTable(
+                                            id="bi-table",
                                             data=[],
                                             columns=[],
                                             page_size=10,
@@ -2677,6 +2885,199 @@ def handle_presets(
         return defaults
 
     return defaults
+
+
+@app.callback(
+    Output("bi-series-select", "options"),
+    Output("bi-series-select", "value"),
+    Input("bi-module-select", "value"),
+    State("bi-series-select", "value"),
+)
+def update_bi_series_options(selected_modules, current_values):
+    if not selected_modules:
+        return [], []
+    options = []
+    for key, info in SERIES_REGISTRY.items():
+        if info.get("stem") in selected_modules:
+            options.append({"label": info.get("display_label", key), "value": key})
+    options = sorted(options, key=lambda item: item["label"])
+    allowed = {opt["value"] for opt in options}
+    current_values = current_values or []
+    next_values = [val for val in current_values if val in allowed]
+    if not next_values:
+        defaults = [key for key in DEFAULT_SERIES_SELECTION if key in allowed]
+        if defaults:
+            next_values = defaults
+        elif options:
+            next_values = [options[0]["value"]]
+    return options, next_values
+
+
+@app.callback(
+    Output("bi-field-panel", "children"),
+    Output("bi-x", "options"),
+    Output("bi-x", "value"),
+    Output("bi-y", "options"),
+    Output("bi-y", "value"),
+    Output("bi-color", "options"),
+    Output("bi-color", "value"),
+    Output("bi-size", "options"),
+    Output("bi-size", "value"),
+    Output("bi-facet-row", "options"),
+    Output("bi-facet-row", "value"),
+    Output("bi-facet-col", "options"),
+    Output("bi-facet-col", "value"),
+    Input("bi-series-select", "value"),
+    Input("bi-dtype-select", "value"),
+    State("bi-x", "value"),
+    State("bi-y", "value"),
+    State("bi-color", "value"),
+    State("bi-size", "value"),
+    State("bi-facet-row", "value"),
+    State("bi-facet-col", "value"),
+)
+def update_bi_fields(selected_keys, dtype_key, x_value, y_value, color_value, size_value, facet_row_value, facet_col_value):
+    selected_infos = _collect_selected_infos(selected_keys, SERIES_REGISTRY)
+    dtype_key = dtype_key or "raw_data"
+    df_long = _build_long_dataframe(selected_infos, dtype_key)
+    if df_long.empty:
+        empty_panel = html.Div("No data available.")
+        return empty_panel, [], None, [], None, [], None, [], None, [], None, [], None
+
+    panel = _bi_field_panel(df_long)
+    fields, numeric_fields = _bi_field_options(df_long)
+    field_options = [{"label": col, "value": col} for col in fields]
+    numeric_options = [{"label": col, "value": col} for col in numeric_fields]
+
+    x_next = x_value if x_value in fields else ("date" if "date" in fields else fields[0])
+    y_next = y_value if y_value in numeric_fields else ("value" if "value" in numeric_fields else numeric_fields[0])
+    color_next = color_value if color_value in fields else ("display_label" if "display_label" in fields else None)
+    size_next = size_value if size_value in numeric_fields else None
+    facet_row_next = facet_row_value if facet_row_value in fields else None
+    facet_col_next = facet_col_value if facet_col_value in fields else None
+
+    return (
+        panel,
+        field_options,
+        x_next,
+        numeric_options if numeric_options else field_options,
+        y_next,
+        field_options,
+        color_next,
+        numeric_options,
+        size_next,
+        field_options,
+        facet_row_next,
+        field_options,
+        facet_col_next,
+    )
+
+
+@app.callback(
+    Output("bi-chart", "figure"),
+    Output("bi-table", "data"),
+    Output("bi-table", "columns"),
+    Output("bi-status", "children"),
+    Input("bi-series-select", "value"),
+    Input("bi-dtype-select", "value"),
+    Input("bi-lookback", "value"),
+    Input("bi-x", "value"),
+    Input("bi-y", "value"),
+    Input("bi-color", "value"),
+    Input("bi-size", "value"),
+    Input("bi-facet-row", "value"),
+    Input("bi-facet-col", "value"),
+    Input("bi-chart-type", "value"),
+    Input("bi-agg", "value"),
+)
+def update_bi_chart(
+    selected_keys,
+    dtype_key,
+    lookback,
+    x_field,
+    y_field,
+    color_field,
+    size_field,
+    facet_row,
+    facet_col,
+    chart_type,
+    agg_method,
+):
+    if not selected_keys:
+        fig = _make_empty_figure("Select series to start.")
+        fig.update_layout(height=520)
+        return fig, [], [], "Select series to start."
+
+    selected_infos = _collect_selected_infos(selected_keys, SERIES_REGISTRY)
+    dtype_key = dtype_key or "raw_data"
+    df_long = _build_long_dataframe(selected_infos, dtype_key)
+    if df_long.empty:
+        fig = _make_empty_figure("No data available.")
+        fig.update_layout(height=520)
+        return fig, [], [], "No data available."
+
+    if lookback:
+        latest_date = df_long["date"].max()
+        if pd.notna(latest_date):
+            cutoff = latest_date - pd.DateOffset(months=int(lookback))
+            df_long = df_long[df_long["date"] >= cutoff]
+
+    if df_long.empty:
+        fig = _make_empty_figure("No data after filters.")
+        fig.update_layout(height=520)
+        return fig, [], [], "No data after filters."
+
+    df_plot = df_long.copy()
+    if agg_method and agg_method != "none":
+        group_cols = [col for col in [x_field, color_field, facet_row, facet_col] if col]
+        if group_cols:
+            if agg_method == "last":
+                df_plot = (
+                    df_plot.sort_values(x_field)
+                    .groupby(group_cols, dropna=False)[y_field]
+                    .last()
+                    .reset_index()
+                )
+            else:
+                df_plot = (
+                    df_plot.groupby(group_cols, dropna=False)[y_field]
+                    .agg(agg_method)
+                    .reset_index()
+                )
+
+    if x_field in df_plot.columns:
+        df_plot = df_plot.sort_values(x_field)
+
+    fig = None
+    color_arg = color_field or None
+    size_arg = size_field or None
+    facet_row_arg = facet_row or None
+    facet_col_arg = facet_col or None
+
+    if chart_type == "line":
+        fig = px.line(df_plot, x=x_field, y=y_field, color=color_arg, facet_row=facet_row_arg, facet_col=facet_col_arg)
+    elif chart_type == "bar":
+        fig = px.bar(df_plot, x=x_field, y=y_field, color=color_arg, facet_row=facet_row_arg, facet_col=facet_col_arg, barmode="group")
+    elif chart_type == "scatter":
+        fig = px.scatter(df_plot, x=x_field, y=y_field, color=color_arg, size=size_arg, facet_row=facet_row_arg, facet_col=facet_col_arg)
+    elif chart_type == "area":
+        fig = px.area(df_plot, x=x_field, y=y_field, color=color_arg, facet_row=facet_row_arg, facet_col=facet_col_arg)
+    elif chart_type == "box":
+        fig = px.box(df_plot, x=x_field, y=y_field, color=color_arg, facet_row=facet_row_arg, facet_col=facet_col_arg)
+    else:
+        fig = px.line(df_plot, x=x_field, y=y_field, color=color_arg)
+
+    fig.update_layout(template="plotly_white", height=520)
+
+    preview = df_plot.copy()
+    if "date" in preview.columns:
+        preview["date"] = preview["date"].dt.strftime("%Y-%m-%d")
+    preview = preview.head(200)
+    table_data = preview.to_dict("records")
+    table_columns = [{"name": col, "id": col} for col in preview.columns]
+
+    status = f"Rows: {len(df_plot):,}" if df_plot is not None else ""
+    return fig, table_data, table_columns, status
 
 
 app.clientside_callback(

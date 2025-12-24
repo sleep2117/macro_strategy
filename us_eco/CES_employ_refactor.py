@@ -629,4 +629,4 @@ show_available_series()
 run_ces_employ_analysis(smart_update=True)
 
 # %%
-plot_ces_employ_series_advanced()
+# plot_ces_employ_series_advanced(['nonfarm_total'], 'single_line', 'mom', periods=24)

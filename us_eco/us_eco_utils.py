@@ -20,6 +20,12 @@ from pathlib import Path
 import warnings
 warnings.filterwarnings('ignore')
 
+try:
+    sys.stdout.reconfigure(errors="replace")
+    sys.stderr.reconfigure(errors="replace")
+except Exception:
+    pass
+
 # 프로젝트 경로 설정
 REPO_ROOT = Path(__file__).resolve().parents[1]
 US_ECO_ROOT = REPO_ROOT / "us_eco"
@@ -85,6 +91,7 @@ class APIConfig:
         # API 사용 가능 여부
         self.BLS_API_AVAILABLE = True
         self.FRED_API_AVAILABLE = True
+        self.BLS_RATE_LIMITED = False
         
         try:
             import requests
@@ -186,6 +193,9 @@ def _fetch_bls_series_range(series_id, start_year, end_year):
     if not api_config.BLS_API_AVAILABLE or api_config.BLS_SESSION is None:
         print(f"❌ BLS API 사용 불가 - {series_id}")
         return None
+    if api_config.BLS_RATE_LIMITED:
+        print(f"[BLS] rate limit active - {series_id}")
+        return None
 
     url = 'https://api.bls.gov/publicAPI/v2/timeseries/data/'
     headers = {'Content-type': 'application/json'}
@@ -239,10 +249,21 @@ def _fetch_bls_series_range(series_id, start_year, end_year):
             return None
         else:
             error_msg = json_data.get('message', 'Unknown error')
-            print(f"⚠️ BLS API 오류: {error_msg}")
-            
-            # Daily threshold 초과시 API 키 전환 시도
-            if 'daily threshold' in error_msg.lower() or 'daily quota' in error_msg.lower():
+            if isinstance(error_msg, list):
+                error_text = " ".join(str(item) for item in error_msg if item is not None)
+            else:
+                error_text = str(error_msg)
+            print(f"⚠️ BLS API 오류: {error_text}")
+
+            # Daily threshold/Rate limit 초과시 API 키 전환 시도
+            error_lower = error_text.lower()
+            if (
+                'daily threshold' in error_lower
+                or 'daily quota' in error_lower
+                or 'too many requests' in error_lower
+                or 'rate limit' in error_lower
+                or '429' in error_lower
+            ):
                 print("📈 Daily threshold 초과 - API 키 전환 시도")
                 switch_bls_api_key()
                 
@@ -279,16 +300,35 @@ def _fetch_bls_series_range(series_id, start_year, end_year):
                             series = pd.Series(df['value'].values, index=df['date'], name=series_id)
                             print(f"✓ BLS 재시도 성공: {series_id}")
                             return series
-                    
+
+                    retry_msg = json_data.get('message', 'Unknown error')
+                    if isinstance(retry_msg, list):
+                        retry_text = " ".join(str(item) for item in retry_msg if item is not None)
+                    else:
+                        retry_text = str(retry_msg)
+                    retry_lower = retry_text.lower()
+                    if (
+                        'daily threshold' in retry_lower
+                        or 'daily quota' in retry_lower
+                        or 'too many requests' in retry_lower
+                        or 'rate limit' in retry_lower
+                        or '429' in retry_lower
+                    ):
+                        api_config.BLS_RATE_LIMITED = True
+
                     print(f"❌ BLS 재시도 실패: {series_id}")
                     return None
                 except Exception as retry_e:
+                    if "429" in str(retry_e):
+                        api_config.BLS_RATE_LIMITED = True
                     print(f"❌ BLS 재시도 중 오류: {retry_e}")
                     return None
             
             return None
             
     except Exception as e:
+        if "429" in str(e):
+            api_config.BLS_RATE_LIMITED = True
         print(f"❌ BLS 요청 실패: {series_id} - {e}")
         return None
 
@@ -297,6 +337,9 @@ def get_bls_data(series_id, start_year=2020, end_year=None):
     """
     BLS API에서 데이터 가져오기 (20년 제한 회피용 청크 요청).
     """
+    if api_config.BLS_RATE_LIMITED:
+        print(f"[BLS] rate limit active - skip {series_id}")
+        return None
     if end_year is None:
         end_year = dt_datetime.now().year
 
@@ -309,6 +352,8 @@ def get_bls_data(series_id, start_year=2020, end_year=None):
     while chunk_start <= end_year:
         chunk_end = min(chunk_start + BLS_MAX_YEAR_SPAN, end_year)
         series_chunk = _fetch_bls_series_range(series_id, chunk_start, chunk_end)
+        if api_config.BLS_RATE_LIMITED:
+            break
         if series_chunk is not None and not series_chunk.empty:
             chunks.append(series_chunk)
         chunk_start = chunk_end + 1
@@ -1585,12 +1630,14 @@ def load_economic_data(series_dict, data_source='BLS', csv_file_path=None,
     # 스마트 업데이트 로직
     needs_api_call = True
     consistency_result = None
+    cached_data = None
     
     if smart_update and not force_reload and csv_file_path:
         print("🤖 스마트 업데이트 모드 활성화")
         
         # CSV에서 데이터 로드 시도
         csv_data = load_data_from_csv(csv_file_path)
+        cached_data = csv_data
         
         if csv_data is not None and not csv_data.empty:
             # 최신 몇 개 데이터만 API로 가져와서 비교
@@ -1639,6 +1686,30 @@ def load_economic_data(series_dict, data_source='BLS', csv_file_path=None,
                     print("📡 데이터 불일치 감지 - 전체 API 호출 진행")
     
     # API를 통한 전체 데이터 로드
+    if data_source == 'BLS' and api_config.BLS_RATE_LIMITED:
+        if cached_data is None and csv_file_path:
+            cached_data = load_data_from_csv(csv_file_path)
+        if cached_data is not None and not cached_data.empty:
+            print("[BLS] rate limit detected - using cached CSV")
+            return {
+                'raw_data': cached_data,
+                'mom_data': calculate_mom_percent(cached_data),
+                'mom_change': calculate_mom_change(cached_data),
+                'yoy_data': calculate_yoy_percent(cached_data),
+                'yoy_change': calculate_yoy_change(cached_data),
+                'load_info': {
+                    'loaded': True,
+                    'load_time': dt_datetime.now(),
+                    'start_date': start_date,
+                    'series_count': len(cached_data.columns),
+                    'data_points': len(cached_data),
+                    'source': 'CSV (rate-limited fallback)',
+                    'consistency_check': consistency_result
+                }
+            }
+        print("[BLS] rate limit detected - no cached CSV")
+        return None
+
     if needs_api_call:
         print(f"📊 {data_source} API를 통한 데이터 수집...")
         
@@ -1650,12 +1721,38 @@ def load_economic_data(series_dict, data_source='BLS', csv_file_path=None,
                 series_data = get_bls_data(series_id, start_year)
             else:  # FRED
                 series_data = get_fred_data(series_id, start_date)
+            if data_source == 'BLS' and api_config.BLS_RATE_LIMITED:
+                break
             
             if series_data is not None and len(series_data) > 0:
                 raw_data_dict[series_name] = series_data
             else:
                 print(f"❌ 데이터 로드 실패: {series_name}")
         
+        if data_source == 'BLS' and api_config.BLS_RATE_LIMITED:
+            if cached_data is None and csv_file_path:
+                cached_data = load_data_from_csv(csv_file_path)
+            if cached_data is not None and not cached_data.empty:
+                print("[BLS] rate limit detected during fetch - using cached CSV")
+                return {
+                    'raw_data': cached_data,
+                    'mom_data': calculate_mom_percent(cached_data),
+                    'mom_change': calculate_mom_change(cached_data),
+                    'yoy_data': calculate_yoy_percent(cached_data),
+                    'yoy_change': calculate_yoy_change(cached_data),
+                    'load_info': {
+                        'loaded': True,
+                        'load_time': dt_datetime.now(),
+                        'start_date': start_date,
+                        'series_count': len(cached_data.columns),
+                        'data_points': len(cached_data),
+                        'source': 'CSV (rate-limited fallback)',
+                        'consistency_check': consistency_result
+                    }
+                }
+            print("[BLS] rate limit detected during fetch - no cached CSV")
+            return None
+
         if len(raw_data_dict) == 0:
             print("❌ 로드된 시리즈가 없습니다.")
             return None

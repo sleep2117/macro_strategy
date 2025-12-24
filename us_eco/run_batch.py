@@ -20,6 +20,7 @@ REPO_ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(REPO_ROOT))
 
+import us_eco_utils as utils_module  # type: ignore
 from us_eco_utils import api_config, switch_bls_api_key  # type: ignore
 
 
@@ -55,6 +56,15 @@ KEY_POOL = {
 }
 
 
+def _restore_module_loaders(module) -> None:
+    real_loader = getattr(utils_module, "load_economic_data", None)
+    if callable(real_loader):
+        setattr(module, "load_economic_data", real_loader)
+    real_group_loader = getattr(utils_module, "load_economic_data_grouped", None)
+    if callable(real_group_loader):
+        setattr(module, "load_economic_data_grouped", real_group_loader)
+
+
 def _load_module_from_path(stem: str):
     path = HERE / f"{stem}.py"
     if not path.exists():
@@ -65,7 +75,29 @@ def _load_module_from_path(stem: str):
         raise ImportError(f"spec not found for {path}")
     module = importlib.util.module_from_spec(spec)
     sys.modules[module_name] = module
-    spec.loader.exec_module(module)  # type: ignore[arg-type]
+
+    original_load = getattr(utils_module, "load_economic_data", None)
+    original_group = getattr(utils_module, "load_economic_data_grouped", None)
+
+    def stub_load(*_args, **_kwargs):
+        return None
+
+    def stub_group(*_args, **_kwargs):
+        return None
+
+    if original_load is not None:
+        utils_module.load_economic_data = stub_load  # type: ignore[assignment]
+    if original_group is not None:
+        utils_module.load_economic_data_grouped = stub_group  # type: ignore[assignment]
+
+    try:
+        spec.loader.exec_module(module)  # type: ignore[arg-type]
+    finally:
+        if original_load is not None:
+            utils_module.load_economic_data = original_load  # type: ignore[assignment]
+        if original_group is not None:
+            utils_module.load_economic_data_grouped = original_group  # type: ignore[assignment]
+        _restore_module_loaders(module)
     return module
 
 
@@ -84,6 +116,8 @@ def _set_bls_key_for_module(stem: str) -> str | None:
         return None
     key_value = KEY_POOL.get(key_name)
     if key_value:
+        if api_config.CURRENT_BLS_KEY != key_value and hasattr(api_config, "BLS_RATE_LIMITED"):
+            api_config.BLS_RATE_LIMITED = False
         api_config.CURRENT_BLS_KEY = key_value
         api_config.BLS_API_KEY = key_value
     return key_value

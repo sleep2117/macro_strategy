@@ -801,14 +801,8 @@ print("✅ plot_cps_series_advanced()는 어떤 시리즈든 원하는 형태로
 print("✅ export_cps_data()는 시각화와 동일한 데이터를 엑셀/CSV로 export!")
 print("✅ 모든 함수가 us_eco_utils의 통합 함수 사용!")
 
-# %%
-load_cps_data()
-plot_cps_series_advanced(['unemployment_rate', 'unemployment_rate_white'], 'multi_line', 'mom')
-
-# %%
-plot_cps_series_advanced(['employment_population_ratio', 'participation_rate'], 'multi_line', 'raw')
-
-# %%
-plot_cps_series_advanced(['civilian_labor_force', 'unemployment_level'], 'dual_axis', 'raw')
-
-# %%
+if __name__ == "__main__":
+    load_cps_data()
+    plot_cps_series_advanced(['unemployment_rate', 'unemployment_rate_white'], 'multi_line', 'mom')
+    plot_cps_series_advanced(['employment_population_ratio', 'participation_rate'], 'multi_line', 'raw')
+    plot_cps_series_advanced(['civilian_labor_force', 'unemployment_level'], 'dual_axis', 'raw')
