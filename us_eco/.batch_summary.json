@@ -1,25 +1,7 @@
 [
   {
-    "batch": "batch9",
-    "module": "gdp_analysis_refactor",
-    "ok": true,
-    "message": "성공"
-  },
-  {
-    "batch": "batch9",
-    "module": "personal_income_refactor",
-    "ok": true,
-    "message": "성공"
-  },
-  {
-    "batch": "batch9",
-    "module": "pce_analysis_refactor",
-    "ok": true,
-    "message": "성공"
-  },
-  {
-    "batch": "batch9",
-    "module": "misc_fred_series_refactor",
+    "batch": "batch2",
+    "module": "PPI_analysis_refactor",
     "ok": true,
     "message": "성공"
   }
