@@ -1,13 +1,13 @@
 {
-  "last_update": "2025-12-01T19:51:46.786609",
+  "last_update": "2026-01-03T14:20:20.764744",
   "data_period": {
     "start": "2025-10-01",
-    "end": "2025-11-28"
+    "end": "2026-01-02"
   },
   "record_counts": {
-    "performance": 37,
-    "holdings": 18,
-    "transactions": 23,
+    "performance": 59,
+    "holdings": 31,
+    "transactions": 50,
     "accounts": 2
   },
   "version": "1.0.0"

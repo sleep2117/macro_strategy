@@ -7,3 +7,4 @@ matplotlib>=3.8
 sdmxthon>=0.1.5
 plotly>=5.22
 dash>=2.17
+dbnomics>=1.2

@@ -10,6 +10,7 @@ import plotly.express as px
 import data_loader
 import portfolio_analyzer
 import yfinance as yf
+from pathlib import Path
 
 def format_won(value) -> str:
     """Format currency as KRW."""
@@ -113,6 +114,10 @@ BOND_TICKERS = {
 
 MOMENTUM_LOOKBACKS = (63, 126, 252)  # 약 3/6/12개월 거래일
 DEFAULT_POWER = 2.0  # 3개월 수익률 기준 제곱
+
+BASE_DIR = Path(__file__).resolve().parent
+GLOBAL_UNIVERSE_DIR = BASE_DIR.parent / "global_universe"
+FX_DIR = GLOBAL_UNIVERSE_DIR / "data" / "fx"
 
 
 @st.cache_data(show_spinner=False)
@@ -220,6 +225,22 @@ def compute_core_satellite_allocation(
 
     df = pd.DataFrame(rows)
     return df.sort_values(["group", "final_weight_pct"], ascending=[True, False])
+
+
+@st.cache_data(show_spinner=False)
+def load_fx_to_krw(currency_code: str) -> pd.Series:
+    """Load FX rates to KRW for a given currency."""
+    if not currency_code or currency_code == "KRW":
+        return pd.Series(dtype=float)
+
+    fx_path = FX_DIR / f"{currency_code}.csv"
+    if not fx_path.exists():
+        return pd.Series(dtype=float)
+
+    df = pd.read_csv(fx_path)
+    df['Date'] = pd.to_datetime(df['Date'])
+    series = df.set_index('Date')['toKRW'].dropna()
+    return series
 
 
 # Page config
@@ -330,7 +351,7 @@ def render_sidebar():
         # Navigation
         page = st.radio(
             "Navigation",
-            ["Overview", "Performance Analysis", "Holdings", "Transactions", "Cash Flow", "Risk", "Core/Satellite Allocation"],
+            ["Overview", "Performance Analysis", "Holdings", "Transactions", "Dividends", "Cash Flow", "Risk", "Core/Satellite Allocation"],
             label_visibility="collapsed"
         )
 
@@ -754,6 +775,104 @@ def render_transactions(start_date=None, end_date=None):
     )
 
 
+def render_dividends(start_date=None, end_date=None):
+    """Render dividend cash flow and yield page."""
+    st.header("Dividend Overview")
+
+    transactions = data_loader.load_transaction_history()
+    if transactions.empty:
+        st.warning("No transaction data available")
+        return
+
+    if start_date:
+        transactions = transactions[transactions['거래일자'] >= pd.to_datetime(start_date)]
+    if end_date:
+        transactions = transactions[transactions['거래일자'] <= pd.to_datetime(end_date)]
+
+    div_tx = transactions[transactions['거래유형'].astype(str).str.contains('배당')].copy()
+    if div_tx.empty:
+        st.info("배당 거래가 없습니다.")
+        return
+
+    # Amount in native currency
+    def native_amount(row):
+        ccy = row.get('통화코드', None)
+        if ccy == "KRW" or pd.isna(ccy):
+            amt = row.get('정산금액', 0)
+            if amt == 0:
+                amt = row.get('거래금액', 0)
+        else:
+            amt = row.get('외화정산금액', 0)
+            if amt == 0:
+                amt = row.get('외화거래금액', 0)
+        return abs(amt)
+
+    div_tx['amount_native'] = div_tx.apply(native_amount, axis=1)
+
+    # Convert to KRW
+    div_tx['amount_krw'] = pd.NA
+    for ccy, idx in div_tx.groupby('통화코드').groups.items():
+        if ccy == "KRW" or pd.isna(ccy):
+            div_tx.loc[idx, 'amount_krw'] = div_tx.loc[idx, 'amount_native']
+            continue
+        fx_series = load_fx_to_krw(str(ccy))
+        if fx_series.empty:
+            continue
+        dates = div_tx.loc[idx, '거래일자']
+        fx_rates = fx_series.reindex(dates, method='ffill').values
+        div_tx.loc[idx, 'amount_krw'] = div_tx.loc[idx, 'amount_native'].values * fx_rates
+
+    div_tx['amount_krw'] = pd.to_numeric(div_tx['amount_krw'], errors='coerce')
+
+    # Monthly totals
+    div_tx['월'] = div_tx['거래일자'].dt.to_period('M').astype(str)
+    monthly = div_tx.groupby('월')['amount_krw'].sum().reset_index()
+
+    st.subheader("Monthly Dividend (KRW)")
+    fig = px.bar(
+        monthly,
+        x='월',
+        y='amount_krw',
+        title="월별 배당금 (KRW)",
+        text='amount_krw',
+        color_discrete_sequence=['#2ca02c']
+    )
+    fig.update_traces(texttemplate="%{text:,.0f}", textposition="outside")
+    fig.update_layout(yaxis_title="KRW", height=360)
+    st.plotly_chart(fig, use_container_width=True)
+
+    st.subheader("Monthly Dividend Table")
+    st.dataframe(
+        monthly.rename(columns={'amount_krw': '배당금(KRW)'}),
+        use_container_width=True,
+        hide_index=True
+    )
+
+    # Dividend yield by asset
+    latest_holdings = data_loader.get_latest_holdings()
+    if latest_holdings.empty:
+        st.info("보유 자산 정보가 없어 배당 수익률을 계산할 수 없습니다.")
+        return
+
+    value_col = get_value_column(latest_holdings)
+    holdings_value = latest_holdings.groupby('종목명')[value_col].sum()
+    div_by_asset = div_tx.groupby('종목명')['amount_krw'].sum()
+
+    yield_table = pd.DataFrame({
+        '배당금(KRW)': div_by_asset,
+        '보유금액(KRW)': holdings_value
+    }).fillna(0)
+    yield_table['배당수익률(%)'] = (
+        yield_table['배당금(KRW)'] / yield_table['보유금액(KRW)'] * 100
+    ).replace([pd.NA, pd.NaT], 0).fillna(0)
+
+    st.subheader("Dividend Yield by Asset")
+    yield_table = yield_table.sort_values('배당수익률(%)', ascending=False)
+    st.dataframe(yield_table.reset_index(), use_container_width=True, hide_index=True)
+
+    st.caption("배당금은 거래 내역 기준이며, 통화가 KRW가 아닌 경우 FX(toKRW)로 환산합니다.")
+
+
 def render_cash_flow(start_date=None, end_date=None):
     """Render cash flow and contribution insights"""
     st.header("Cash Flow & Contributions")
@@ -998,6 +1117,8 @@ def main():
         render_holdings()
     elif page == "Transactions":
         render_transactions(start_date, end_date)
+    elif page == "Dividends":
+        render_dividends(start_date, end_date)
     elif page == "Cash Flow":
         render_cash_flow(start_date, end_date)
     elif page == "Risk":

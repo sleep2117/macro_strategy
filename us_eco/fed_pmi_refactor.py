@@ -1020,61 +1020,62 @@ def show_available_series():
             if len(fed_groups[fed_key]) > 5:
                 print(f"  ... 외 {len(fed_groups[fed_key])-5}개 더")
 
-# %%
-# === 사용 예시 및 설명 ===
+if __name__ == "__main__":
+    # %%
+    # === 사용 예시 및 설명 ===
 
-print("=== 리팩토링된 연준 PMI 분석 도구 사용법 ===")
-print("1. 데이터 로드:")
-print("   load_all_fed_pmi_data_enhanced()  # 그룹별 스마트 업데이트")
-print("   load_all_fed_pmi_data_enhanced(force_reload=True)  # 강제 재로드")
-print()
-print("2. 🔥 범용 시각화 (가장 강력!):")
-print("   plot_fed_pmi_series_advanced(['philadelphia_manufacturing_general_activity', 'chicago_economic_conditions_activity_index'], 'multi_line', 'raw')")
-print("   plot_fed_pmi_series_advanced(['new_york_manufacturing_general_business_conditions'], 'horizontal_bar', 'mom')")
-print("   plot_fed_pmi_series_advanced(['dallas_manufacturing_general_business_activity'], 'single_line', 'raw', periods=24)")
-print()
-print("3. 🔥 데이터 Export:")
-print("   export_fed_pmi_data(['philadelphia_manufacturing_general_activity', 'chicago_economic_conditions_activity_index'], 'raw')")
-print("   export_fed_pmi_data(['new_york_manufacturing_general_business_conditions'], 'mom', periods=24, file_format='csv')")
-print("   export_fed_pmi_data(['dallas_manufacturing_general_business_activity'], 'raw', target_date='2024-06-01')")
-print()
-print("4. 📋 데이터 확인:")
-print("   show_available_series()  # 사용 가능한 모든 시리즈 목록")
-print("   get_raw_data()  # 원본 확산지수 데이터")
-print("   get_diffusion_data()  # 0 기준선 대비 확산지수")
-print("   get_mom_data()  # 전월대비 변화 데이터")
-print("   get_data_status()  # 현재 데이터 상태")
-print()
-print("✅ plot_fed_pmi_series_advanced()는 어떤 시리즈든 원하는 형태로 시각화!")
-print("✅ export_fed_pmi_data()는 시각화와 동일한 데이터를 엑셀/CSV로 export!")
-print("✅ 모든 함수가 us_eco_utils의 통합 함수 사용!")
-print()
-print("🔥 그룹별 스마트 업데이트 특징:")
-print("   • 필라델피아 연준만 새 데이터가 있으면 필라델피아만 업데이트")
-print("   • 시카고 연준만 새 데이터가 있으면 시카고만 업데이트")
-print("   • 전체 재로드 없이 부분 업데이트로 효율성 극대화")
-print("   • 각 연준의 발표 일정에 맞춰 개별 스마트 업데이트")
-print()
-print("🏦 지원되는 연준:")
-for bank_name, config in FEDERAL_RESERVE_BANKS.items():
-    if config['enabled']:
-        sectors = list(config['series'].keys())
-        print(f"   • {config['name']}: {', '.join(sectors)}")
-print()
-print("💡 연준별 발표 일정:")
-print("   • 필라델피아: 매월 17일경 (제조업), 매월 23일경 (비제조업)")
-print("   • 뉴욕: 매월 15일경 (제조업), 매월 20일경 (서비스업)")
-print("   • 시카고: 매월 마지막 금요일")
-print("   • 댈러스: 매월 마지막 월요일 (제조업), 격월 (소매업)")
-print()
-print("🎯 최적화된 워크플로:")
-print("   1. 매일 load_all_fed_pmi_data_enhanced() 실행")
-print("   2. 새로운 데이터가 있는 연준만 자동 업데이트")
-print("   3. plot_fed_pmi_series_advanced()로 시각화")
-print("   4. export_fed_pmi_data()로 데이터 내보내기")
-print("   5. 효율적이고 빠른 데이터 관리!")
+    print("=== 리팩토링된 연준 PMI 분석 도구 사용법 ===")
+    print("1. 데이터 로드:")
+    print("   load_all_fed_pmi_data_enhanced()  # 그룹별 스마트 업데이트")
+    print("   load_all_fed_pmi_data_enhanced(force_reload=True)  # 강제 재로드")
+    print()
+    print("2. 🔥 범용 시각화 (가장 강력!):")
+    print("   plot_fed_pmi_series_advanced(['philadelphia_manufacturing_general_activity', 'chicago_economic_conditions_activity_index'], 'multi_line', 'raw')")
+    print("   plot_fed_pmi_series_advanced(['new_york_manufacturing_general_business_conditions'], 'horizontal_bar', 'mom')")
+    print("   plot_fed_pmi_series_advanced(['dallas_manufacturing_general_business_activity'], 'single_line', 'raw', periods=24)")
+    print()
+    print("3. 🔥 데이터 Export:")
+    print("   export_fed_pmi_data(['philadelphia_manufacturing_general_activity', 'chicago_economic_conditions_activity_index'], 'raw')")
+    print("   export_fed_pmi_data(['new_york_manufacturing_general_business_conditions'], 'mom', periods=24, file_format='csv')")
+    print("   export_fed_pmi_data(['dallas_manufacturing_general_business_activity'], 'raw', target_date='2024-06-01')")
+    print()
+    print("4. 📋 데이터 확인:")
+    print("   show_available_series()  # 사용 가능한 모든 시리즈 목록")
+    print("   get_raw_data()  # 원본 확산지수 데이터")
+    print("   get_diffusion_data()  # 0 기준선 대비 확산지수")
+    print("   get_mom_data()  # 전월대비 변화 데이터")
+    print("   get_data_status()  # 현재 데이터 상태")
+    print()
+    print("✅ plot_fed_pmi_series_advanced()는 어떤 시리즈든 원하는 형태로 시각화!")
+    print("✅ export_fed_pmi_data()는 시각화와 동일한 데이터를 엑셀/CSV로 export!")
+    print("✅ 모든 함수가 us_eco_utils의 통합 함수 사용!")
+    print()
+    print("🔥 그룹별 스마트 업데이트 특징:")
+    print("   • 필라델피아 연준만 새 데이터가 있으면 필라델피아만 업데이트")
+    print("   • 시카고 연준만 새 데이터가 있으면 시카고만 업데이트")
+    print("   • 전체 재로드 없이 부분 업데이트로 효율성 극대화")
+    print("   • 각 연준의 발표 일정에 맞춰 개별 스마트 업데이트")
+    print()
+    print("🏦 지원되는 연준:")
+    for bank_name, config in FEDERAL_RESERVE_BANKS.items():
+        if config['enabled']:
+            sectors = list(config['series'].keys())
+            print(f"   • {config['name']}: {', '.join(sectors)}")
+    print()
+    print("💡 연준별 발표 일정:")
+    print("   • 필라델피아: 매월 17일경 (제조업), 매월 23일경 (비제조업)")
+    print("   • 뉴욕: 매월 15일경 (제조업), 매월 20일경 (서비스업)")
+    print("   • 시카고: 매월 마지막 금요일")
+    print("   • 댈러스: 매월 마지막 월요일 (제조업), 격월 (소매업)")
+    print()
+    print("🎯 최적화된 워크플로:")
+    print("   1. 매일 load_all_fed_pmi_data_enhanced() 실행")
+    print("   2. 새로운 데이터가 있는 연준만 자동 업데이트")
+    print("   3. plot_fed_pmi_series_advanced()로 시각화")
+    print("   4. export_fed_pmi_data()로 데이터 내보내기")
+    print("   5. 효율적이고 빠른 데이터 관리!")
 
-# %%
+    # %%
 # === 수정 내역 (2025-08-22) ===
 # 1. KeyError: 'new' 오류 수정
 #    - fed_banks 파싱 로직에서 'new_york' 특별 처리 추가
@@ -1085,7 +1086,8 @@ print("   5. 효율적이고 빠른 데이터 관리!")
 #    - export_fed_pmi_data에도 동일한 방식 적용
 
 # %%
-load_all_fed_pmi_data_enhanced()
-plot_fed_pmi_series_advanced(['philadelphia_manufacturing_general_activity', 'chicago_economic_conditions_activity_index'], 'multi_line', 'raw')
+if __name__ == "__main__":
+    load_all_fed_pmi_data_enhanced()
+    plot_fed_pmi_series_advanced(['philadelphia_manufacturing_general_activity', 'chicago_economic_conditions_activity_index'], 'multi_line', 'raw')
 
 # %%

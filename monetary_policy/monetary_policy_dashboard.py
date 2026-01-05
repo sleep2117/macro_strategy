@@ -26,7 +26,7 @@ NYFED_BASE_URL = "https://markets.newyorkfed.org/api"
 DEFAULT_START = date(2018, 1, 1)
 DEFAULT_END: date | None = None
 MATURITY_BUCKETS = [(0, 1), (1, 3), (3, 5), (5, 7), (7, 10), (10, 20), (20, 200)]
-DATA_DIR = Path(__file__).resolve().parent
+DATA_DIR = Path(__file__).resolve().parent / "data"
 
 SERIES: Dict[str, Dict[str, Any]] = {
     "walcl": {"id": "WALCL", "label": "Fed balance sheet (WALCL)", "unit": "millions"},
@@ -965,7 +965,7 @@ def render_reserve_demand_elasticity() -> None:
 
 
 def render_spreads_monitor(df: pd.DataFrame, ny_rates: Dict[str, pd.DataFrame]) -> None:
-    st.subheader("Money Market Spreads Monitor")
+    st.subheader("머니마켓 스프레드 모니터")
 
     def _get_rate(series_name: str) -> pd.Series:
         if series_name in df:
@@ -975,31 +975,71 @@ def render_spreads_monitor(df: pd.DataFrame, ny_rates: Dict[str, pd.DataFrame]) 
             return rate_df["rate"]
         return pd.Series(dtype=float)
 
-    # Build spreads
-    spreads: Dict[str, Dict[str, str | pd.Series]] = {
-        "Private repo demand (TGCR - ON RRP)": {
+    spreads = [
+        {
+            "title": "민간 레포 수요 (TGCR - ON RRP)",
+            "file": "spread_tgcr_onrrp.csv",
             "series": _get_rate("tgcr") - _get_rate("onrrp_rate"),
-            "desc": "Demand for cash vs collateral; higher spread indicates excess collateral.",
+            "desc": "민간 레포 금리와 연준 ON RRP 금리의 차이로 현금 vs 담보 수요를 가늠.",
+            "above": "담보 수요 강함/현금 부족 신호",
+            "below": "현금 풍부/담보 수요 약함",
         },
-        "Bank repos (SOFR - IORB)": {
+        {
+            "title": "SOFR - ON RRP",
+            "file": "spread_sofr_onrrp.csv",
+            "series": _get_rate("sofr") - _get_rate("onrrp_rate"),
+            "desc": "시장 레포 금리와 정책 하한(ON RRP) 간의 스프레드.",
+            "above": "민간 레포 수요 우위/금리 상방 압력",
+            "below": "ON RRP 하한 근접/현금 공급 우위",
+        },
+        {
+            "title": "SOFR - SRF",
+            "file": "spread_sofr_srf.csv",
+            "series": _get_rate("sofr") - _get_rate("srf_rate"),
+            "desc": "시장 레포 금리와 SRF(백스톱 상단) 간의 스프레드.",
+            "above": "상단 스트레스/백스톱 근접",
+            "below": "시장금리 여유/백스톱 하회",
+        },
+        {
+            "title": "TGCR - SOFR",
+            "file": "spread_tgcr_sofr.csv",
+            "series": _get_rate("tgcr") - _get_rate("sofr"),
+            "desc": "삼자(Triparty) 레포와 SOFR 평균 간의 차이로 시장 구성을 가늠.",
+            "above": "삼자 레포 금리 우위/타이트",
+            "below": "광범위 레포 금리 우위",
+        },
+        {
+            "title": "은행 레포 활동 (SOFR - IORB)",
+            "file": "spread_sofr_iorb.csv",
             "series": _get_rate("sofr") - _get_rate("iorb"),
-            "desc": "Above zero implies banks deploy reserves into repos consistently.",
+            "desc": "SOFR이 IORB를 상회하면 은행의 레포 공급 유인이 커짐.",
+            "above": "은행 준비금 레포 공급 증가",
+            "below": "레포 공급 유인 약화",
         },
-        "Reserve demand (EFFR - IORB)": {
+        {
+            "title": "준비금 수요 (EFFR - IORB)",
+            "file": "spread_effr_iorb.csv",
             "series": _get_rate("effr") - _get_rate("iorb"),
-            "desc": "Scarcity vs abundance of reserves; positive indicates scarcity.",
+            "desc": "연방기금금리와 IORB 차이로 준비금 타이트함을 가늠.",
+            "above": "준비금 풍부/수요 약함",
+            "below": "준비금 부족/수요 강함",
         },
-        "FHLB repo demand (SOFR - EFFR)": {
+        {
+            "title": "FHLB 유동성 배치 (SOFR - EFFR)",
+            "file": "spread_sofr_effr.csv",
             "series": _get_rate("sofr") - _get_rate("effr"),
-            "desc": "Suggests where FHLBs invest liquidity portfolios.",
+            "desc": "담보부(SOFR)와 무담보(EFFR) 간 상대 매력을 보여줌.",
+            "above": "레포 쪽 수익 우위/배치 유인",
+            "below": "무담보 시장 우위",
         },
-    }
+    ]
 
     any_data = False
-    for title, payload in spreads.items():
+    for payload in spreads:
+        title = payload["title"]
         ser = payload["series"].dropna()
         if ser.empty:
-            st.info(f"{title}: data unavailable.")
+            st.info(f"{title}: 데이터 없음.")
             continue
         any_data = True
         fig = go.Figure(
@@ -1013,23 +1053,46 @@ def render_spreads_monitor(df: pd.DataFrame, ny_rates: Dict[str, pd.DataFrame]) 
                 )
             ]
         )
+        fig.add_hline(y=0, line=dict(color="#d32f2f", dash="dot", width=1))
+        fig.add_annotation(
+            xref="paper",
+            yref="paper",
+            x=0.01,
+            y=0.98,
+            text=f"0 이상: {payload['above']}",
+            showarrow=False,
+            font=dict(size=11, color="#d32f2f"),
+            align="left",
+            bgcolor="rgba(255,255,255,0.6)",
+        )
+        fig.add_annotation(
+            xref="paper",
+            yref="paper",
+            x=0.01,
+            y=0.02,
+            text=f"0 이하: {payload['below']}",
+            showarrow=False,
+            font=dict(size=11, color="#1b5e20"),
+            align="left",
+            bgcolor="rgba(255,255,255,0.6)",
+        )
         fig.update_layout(
             height=260,
-            yaxis_title="Spread (pp)",
+            yaxis_title="스프레드 (pp)",
             margin=dict(l=10, r=10, t=30, b=10),
         )
-        st.markdown(f"**{title}** – {payload['desc']}")
+        st.markdown(f"**{title}** — {payload['desc']}")
         st.plotly_chart(fig, use_container_width=True, theme="streamlit", key=f"spread_{uuid4()}")
         st.download_button(
             f"Download {title} (CSV)",
             ser.to_csv().encode("utf-8"),
-            file_name=title.replace(" ", "_").replace("(", "").replace(")", "").replace("-", "_") + ".csv",
+            file_name=payload["file"],
             mime="text/csv",
             key=f"spread_csv_{uuid4()}",
         )
 
     if not any_data:
-        st.info("No spreads could be computed with available data.")
+        st.info("계산 가능한 스프레드가 없습니다.")
 
 
 def render_stress_monitor(df: pd.DataFrame, ny_rates: Dict[str, pd.DataFrame], repo_ops: Dict[str, pd.DataFrame]) -> None:

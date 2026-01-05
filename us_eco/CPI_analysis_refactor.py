@@ -44,7 +44,21 @@ CPI_KOREAN_NAMES = ALL_KOREAN_NAMES
 CSV_FILE_PATH = data_path('cpi_data.csv')
 
 # 전역 데이터 저장소
-CPI_DATA = {}
+CPI_DATA = {
+    'raw_data': pd.DataFrame(),
+    'mom_data': pd.DataFrame(),
+    'mom_change': pd.DataFrame(),
+    'yoy_data': pd.DataFrame(),
+    'yoy_change': pd.DataFrame(),
+    'latest_values': {},
+    'load_info': {
+        'loaded': False,
+        'load_time': None,
+        'start_date': None,
+        'series_count': 0,
+        'data_points': 0,
+    },
+}
 
 # %%
 # === 데이터 로드 함수 ===
@@ -83,26 +97,27 @@ def load_cpi_data(start_date='2020-01-01', smart_update=True, force_reload=False
         return False
 
 def print_load_info():
-    """로드 정보 출력"""
-    if not CPI_DATA:
-        print("❌ 데이터가 로드되지 않음")
+    """?? ?? ??"""
+    info = CPI_DATA.get('load_info') or {}
+    if not info.get('loaded'):
+        print("?? ???? ???? ?????.")
         return
-    
-    info = CPI_DATA['load_info']
-    print(f"📊 로드된 CPI 데이터 정보:")
-    print(f"   시리즈 개수: {info['series_count']}")
-    print(f"   데이터 포인트: {info['data_points']}")
-    print(f"   시작 날짜: {info['start_date']}")
-    print(f"   로드 시간: {info['load_time'].strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"   데이터 소스: {info.get('source', 'API')}")
-    
-    if CPI_DATA['raw_data'] is not None and not CPI_DATA['raw_data'].empty:
-        date_range = f"{CPI_DATA['raw_data'].index[0].strftime('%Y-%m')} ~ {CPI_DATA['raw_data'].index[-1].strftime('%Y-%m')}"
-        print(f"   데이터 기간: {date_range}")
 
-# %%
-# === 범용 시각화 함수 ===
+    print(f"?? ??? CPI ??? ??:")
+    print(f"   ??? ??: {info['series_count']}")
+    print(f"   ??? ???: {info['data_points']}")
+    print(f"   ?? ??: {info['start_date']}")
+    load_time = info.get('load_time')
+    if load_time:
+        print(f"   ?? ??: {load_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    else:
+        print("   ?? ??: N/A")
+    print(f"   ??? ??: {info.get('source', 'API')}")
 
+    raw_data = CPI_DATA.get('raw_data')
+    if raw_data is not None and not raw_data.empty:
+        date_range = f"{raw_data.index[0].strftime('%Y-%m')} ~ {raw_data.index[-1].strftime('%Y-%m')}"
+        print(f"   ??? ??: {date_range}")
 def plot_cpi_series_advanced(series_list, chart_type='multi_line', data_type='mom',
                             periods=None, target_date=None):
     """
@@ -177,23 +192,6 @@ def export_cpi_data(series_list, data_type='mom', periods=None, target_date=None
     )
 
 # === 메인 데이터 로드 함수 ===
-def print_load_info():
-    """로드 정보 출력"""
-    info = CPI_DATA['load_info']
-    if not info['loaded']:
-        print("❌ 데이터가 로드되지 않음")
-        return
-    
-    print(f"📊 로드된 데이터 정보:")
-    print(f"   시리즈 개수: {info['series_count']}")
-    print(f"   데이터 포인트: {info['data_points']}")
-    print(f"   시작 날짜: {info['start_date']}")
-    print(f"   로드 시간: {info['load_time'].strftime('%Y-%m-%d %H:%M:%S')}")
-    
-    if not CPI_DATA['raw_data'].empty:
-        date_range = f"{CPI_DATA['raw_data'].index[0].strftime('%Y-%m')} ~ {CPI_DATA['raw_data'].index[-1].strftime('%Y-%m')}"
-        print(f"   데이터 기간: {date_range}")
-
 def clear_data():
     """데이터 초기화"""
     global CPI_DATA
@@ -983,63 +981,64 @@ def create_hierarchical_cpi_chart(level='level2', chart_type='auto', title=None)
 # %%
 # === 사용 예시 ===
 
-print("\n=== 리팩토링된 CPI 데이터 분석 도구 사용법 ===")
-print("1. 데이터 로드:")
-print("   load_cpi_data()  # 스마트 업데이트 활성화")
-print("   load_cpi_data(smart_update=False)  # 전체 재로드")
-print("   load_cpi_data(force_reload=True)  # 강제 재로드")
-print()
-print("2. 🔥 범용 시각화 함수 (가장 강력한 함수!):")
-print("   # 헤드라인 vs 코어 CPI 비교")
-print("   plot_cpi_series_advanced(['headline', 'core'], 'multi_line', 'mom')")
-print("   # 식품, 에너지, 주거 비교")
-print("   plot_cpi_series_advanced(['food', 'energy', 'shelter'], 'multi_line', 'yoy')")
-print("   # 가로 바 차트 (최신값 기준)")
-print("   plot_cpi_series_advanced(['food', 'energy', 'shelter'], 'horizontal_bar', 'mom')")
-print("   # 최근 24개월만 보기")
-print("   plot_cpi_series_advanced(['headline', 'core'], 'single_line', 'mom', periods=24)")
-print("   # 특정 날짜 기준 차트")
-print("   plot_cpi_series_advanced(['headline'], 'single_line', 'mom', target_date='2024-06-01')")
-print("   # 이중축 차트 (레벨 vs 변화율)")
-print("   plot_cpi_series_advanced(['headline', 'core'], 'dual_axis', 'raw')")
-print()
-print("3. 기존 전용 시각화 함수들:")
-print("   create_cpi_timeseries_chart(['headline', 'core'], 'auto')  # 자동 분석")
-print("   create_cpi_component_comparison(['food', 'energy', 'shelter'], 'yoy')")
-print("   create_hierarchical_cpi_chart('level2', 'auto')  # 계층별 차트")
-print()
-print("4. 🔥 데이터 Export (새로운 기능!):")
-print("   # 엑셀로 export (전체 데이터)")
-print("   export_cpi_data(['headline', 'core'], 'mom')")
-print("   # CSV로 export (최근 24개월)")
-print("   export_cpi_data(['headline'], 'raw', periods=24, file_format='csv')")
-print("   # 특정 날짜까지만")
-print("   export_cpi_data(['food', 'energy'], 'yoy', target_date='2024-06-01')")
-print("   # 커스텀 경로 지정")
-print("   export_cpi_data(['headline'], 'mom', export_path=repo_path('my_cpi_data.xlsx'))")
-print()
-print("5. 통합 분석:")
-print("   run_cpi_analysis()  # 전체 CPI 분석")
-print()
-print("✅ plot_cpi_series_advanced()는 325개 시리즈 중 어떤 것도 원하는 형태로 시각화 가능!")
-print("✅ export_cpi_data()는 시각화와 동일한 데이터를 엑셀/CSV로 export!")
-print("✅ 모든 함수가 us_eco_utils의 통합 함수를 사용합니다.")
-print("✅ 기존 CPI 전용 분석 함수들도 그대로 사용 가능합니다!")
+if __name__ == "__main__":
+    print("\n=== 리팩토링된 CPI 데이터 분석 도구 사용법 ===")
+    print("1. 데이터 로드:")
+    print("   load_cpi_data()  # 스마트 업데이트 활성화")
+    print("   load_cpi_data(smart_update=False)  # 전체 재로드")
+    print("   load_cpi_data(force_reload=True)  # 강제 재로드")
+    print()
+    print("2. 🔥 범용 시각화 함수 (가장 강력한 함수!):")
+    print("   # 헤드라인 vs 코어 CPI 비교")
+    print("   plot_cpi_series_advanced(['headline', 'core'], 'multi_line', 'mom')")
+    print("   # 식품, 에너지, 주거 비교")
+    print("   plot_cpi_series_advanced(['food', 'energy', 'shelter'], 'multi_line', 'yoy')")
+    print("   # 가로 바 차트 (최신값 기준)")
+    print("   plot_cpi_series_advanced(['food', 'energy', 'shelter'], 'horizontal_bar', 'mom')")
+    print("   # 최근 24개월만 보기")
+    print("   plot_cpi_series_advanced(['headline', 'core'], 'single_line', 'mom', periods=24)")
+    print("   # 특정 날짜 기준 차트")
+    print("   plot_cpi_series_advanced(['headline'], 'single_line', 'mom', target_date='2024-06-01')")
+    print("   # 이중축 차트 (레벨 vs 변화율)")
+    print("   plot_cpi_series_advanced(['headline', 'core'], 'dual_axis', 'raw')")
+    print()
+    print("3. 기존 전용 시각화 함수들:")
+    print("   create_cpi_timeseries_chart(['headline', 'core'], 'auto')  # 자동 분석")
+    print("   create_cpi_component_comparison(['food', 'energy', 'shelter'], 'yoy')")
+    print("   create_hierarchical_cpi_chart('level2', 'auto')  # 계층별 차트")
+    print()
+    print("4. 🔥 데이터 Export (새로운 기능!):")
+    print("   # 엑셀로 export (전체 데이터)")
+    print("   export_cpi_data(['headline', 'core'], 'mom')")
+    print("   # CSV로 export (최근 24개월)")
+    print("   export_cpi_data(['headline'], 'raw', periods=24, file_format='csv')")
+    print("   # 특정 날짜까지만")
+    print("   export_cpi_data(['food', 'energy'], 'yoy', target_date='2024-06-01')")
+    print("   # 커스텀 경로 지정")
+    print("   export_cpi_data(['headline'], 'mom', export_path=repo_path('my_cpi_data.xlsx'))")
+    print()
+    print("5. 통합 분석:")
+    print("   run_cpi_analysis()  # 전체 CPI 분석")
+    print()
+    print("✅ plot_cpi_series_advanced()는 325개 시리즈 중 어떤 것도 원하는 형태로 시각화 가능!")
+    print("✅ export_cpi_data()는 시각화와 동일한 데이터를 엑셀/CSV로 export!")
+    print("✅ 모든 함수가 us_eco_utils의 통합 함수를 사용합니다.")
+    print("✅ 기존 CPI 전용 분석 함수들도 그대로 사용 가능합니다!")
 
 
-# %%
-result = load_cpi_data()
-plot_cpi_series_advanced(['commodities', 'services', 'durables', 'nondurables', 'energy_commodities'], 'multi_line', 'yoy')
+    # %%
+    result = load_cpi_data()
+    plot_cpi_series_advanced(['commodities', 'services', 'durables', 'nondurables', 'energy_commodities'], 'multi_line', 'yoy')
 
-# %%
-plot_cpi_series_advanced(['apparel', 'appliances', 'furniture_bedding', 'sports_equipment', 'toys'], 'multi_line', 'yoy')
+    # %%
+    plot_cpi_series_advanced(['apparel', 'appliances', 'furniture_bedding', 'sports_equipment', 'toys'], 'multi_line', 'yoy')
 
-# %%
-plot_cpi_series_advanced(['headline', 'core'], 'multi_line', 'yoy')
+    # %%
+    plot_cpi_series_advanced(['headline', 'core'], 'multi_line', 'yoy')
 
-# %%
-plot_cpi_series_advanced(['commodities', 'services', 'durables',
-                          'nondurables', 'energy_commodities'], 'multi_line', 'yoy')
-# %%
-create_hierarchical_cpi_chart('level4', 'yoy')
-# %%
+    # %%
+    plot_cpi_series_advanced(['commodities', 'services', 'durables',
+                              'nondurables', 'energy_commodities'], 'multi_line', 'yoy')
+    # %%
+    create_hierarchical_cpi_chart('level4', 'yoy')
+    # %%

@@ -24,7 +24,7 @@ from kpds_fig_format_enhanced import *
 # === FRED API 키 설정 ===
 
 # FRED 데이터이므로 FRED API 키 필요
-# api_config.FRED_API_KEY = '...'
+api_config.FRED_API_KEY = 'f4bd434811e42e42287a0e5ccf400fff'  # ADP 파일에서 가져온 키
 
 # %%
 # === Federal Reserve Balance Sheet H.4.1 시리즈 정의 ===
@@ -573,61 +573,63 @@ def plot_reserve_gdp_ratio(periods=None, target_ratio=None, target_date=None):
 # %%
 # === 사용 예시 ===
 
-print("=== 리팩토링된 Federal Reserve Balance Sheet 분석 도구 사용법 ===")
-print("1. 데이터 로드:")
-print("   load_fed_balance_data()  # 스마트 업데이트")
-print("   load_fed_balance_data(force_reload=True)  # 강제 재로드")
-print()
-print("2. 🔥 범용 시각화 (가장 강력!):")
-print("   plot_fed_balance_series_advanced(['total_assets', 'reserve_balances'], 'multi_line', 'raw')")
-print("   plot_fed_balance_series_advanced(['reverse_repo'], 'horizontal_bar', 'yoy', left_ytitle='%')")
-print("   plot_fed_balance_series_advanced(['total_assets'], 'single_line', 'mom', periods=24, left_ytitle='%')")
-print("   plot_fed_balance_series_advanced(['total_assets', 'reserve_balances'], 'dual_axis', 'raw', left_ytitle='백만 달러', right_ytitle='백만 달러')")
-print()
-print("3. 🔥 데이터 Export:")
-print("   export_fed_balance_data(['total_assets', 'reserve_balances'], 'raw')")
-print("   export_fed_balance_data(['reverse_repo'], 'mom', periods=24, file_format='csv')")
-print("   export_fed_balance_data(['treasury_general_account'], 'yoy', target_date='2024-06-01')")
-print()
-print("4. 🔥 특화 분석:")
-print("   calculate_liquidity_metrics()  # 유동성 지표 계산")
-print("   plot_liquidity_dashboard()     # 유동성 대시보드")
-print()
-print("5. 🔥 지준금/GDP 비율 분석 (KPDS 스타일):")
-print("   calculate_reserve_gdp_ratio()  # 지준금/GDP 비율 계산")
-print("   plot_reserve_gdp_ratio()       # 기본 KPDS 라인 차트")
-print("   plot_reserve_gdp_ratio(periods=52, target_ratio=15.0)  # 목표 비율 라인 포함")
-print("   plot_reserve_gdp_ratio_simple() # 간단한 버전")
-print()
-print("6. 🔥 타이틀 출력 방식 (CLAUDE.md 규칙):")
-print('   print("지준금/GDP 비율 추이")')
-print("   plot_reserve_gdp_ratio()")
-print()
-print("✅ plot_fed_balance_series_advanced()는 어떤 시리즈든 원하는 형태로 시각화!")
-print("✅ export_fed_balance_data()는 시각화와 동일한 데이터를 엑셀/CSV로 export!")
-print("✅ 모든 함수가 us_eco_utils의 통합 함수 사용!")
-print("✅ Federal Reserve H.4.1 Balance Sheet 전용 유동성 분석 기능 포함!")
-print("✅ 지준금/GDP 비율 분석을 KPDS 표준 스타일로 시각화!")
-print("✅ 목표 비율 horizontal line과 KPDS 색상 팔레트 지원!")
-
-# %%
-# === 테스트 및 실행 ===
-print("🚀 Federal Reserve Balance Sheet 분석 시작...")
-
-# 데이터 로드
-load_fed_balance_data()
-
-# %%
-# 유동성 대시보드 테스트 (개선된 연속성)
-print("💧 유동성 대시보드")
-plot_liquidity_dashboard()
-
-# %%
-# 지준금/GDP 비율 분석 테스트 (KPDS 스타일)
-print("📊 지준금/GDP 비율 추이")
-plot_reserve_gdp_ratio()
-
-# %%
-# 목표 비율이 포함된 분석 (KPDS 스타일)
-print("🎯 지준금/GDP 비율 vs 목표 10%")
-plot_reserve_gdp_ratio(target_ratio=10.0, periods=104)
+if __name__ == "__main__":
+    
+    print("=== 리팩토링된 Federal Reserve Balance Sheet 분석 도구 사용법 ===")
+    print("1. 데이터 로드:")
+    print("   load_fed_balance_data()  # 스마트 업데이트")
+    print("   load_fed_balance_data(force_reload=True)  # 강제 재로드")
+    print()
+    print("2. 🔥 범용 시각화 (가장 강력!):")
+    print("   plot_fed_balance_series_advanced(['total_assets', 'reserve_balances'], 'multi_line', 'raw')")
+    print("   plot_fed_balance_series_advanced(['reverse_repo'], 'horizontal_bar', 'yoy', left_ytitle='%')")
+    print("   plot_fed_balance_series_advanced(['total_assets'], 'single_line', 'mom', periods=24, left_ytitle='%')")
+    print("   plot_fed_balance_series_advanced(['total_assets', 'reserve_balances'], 'dual_axis', 'raw', left_ytitle='백만 달러', right_ytitle='백만 달러')")
+    print()
+    print("3. 🔥 데이터 Export:")
+    print("   export_fed_balance_data(['total_assets', 'reserve_balances'], 'raw')")
+    print("   export_fed_balance_data(['reverse_repo'], 'mom', periods=24, file_format='csv')")
+    print("   export_fed_balance_data(['treasury_general_account'], 'yoy', target_date='2024-06-01')")
+    print()
+    print("4. 🔥 특화 분석:")
+    print("   calculate_liquidity_metrics()  # 유동성 지표 계산")
+    print("   plot_liquidity_dashboard()     # 유동성 대시보드")
+    print()
+    print("5. 🔥 지준금/GDP 비율 분석 (KPDS 스타일):")
+    print("   calculate_reserve_gdp_ratio()  # 지준금/GDP 비율 계산")
+    print("   plot_reserve_gdp_ratio()       # 기본 KPDS 라인 차트")
+    print("   plot_reserve_gdp_ratio(periods=52, target_ratio=15.0)  # 목표 비율 라인 포함")
+    print("   plot_reserve_gdp_ratio_simple() # 간단한 버전")
+    print()
+    print("6. 🔥 타이틀 출력 방식 (CLAUDE.md 규칙):")
+    print('   print("지준금/GDP 비율 추이")')
+    print("   plot_reserve_gdp_ratio()")
+    print()
+    print("✅ plot_fed_balance_series_advanced()는 어떤 시리즈든 원하는 형태로 시각화!")
+    print("✅ export_fed_balance_data()는 시각화와 동일한 데이터를 엑셀/CSV로 export!")
+    print("✅ 모든 함수가 us_eco_utils의 통합 함수 사용!")
+    print("✅ Federal Reserve H.4.1 Balance Sheet 전용 유동성 분석 기능 포함!")
+    print("✅ 지준금/GDP 비율 분석을 KPDS 표준 스타일로 시각화!")
+    print("✅ 목표 비율 horizontal line과 KPDS 색상 팔레트 지원!")
+    
+    # %%
+    # === 테스트 및 실행 ===
+    print("🚀 Federal Reserve Balance Sheet 분석 시작...")
+    
+    # 데이터 로드
+    load_fed_balance_data()
+    
+    # %%
+    # 유동성 대시보드 테스트 (개선된 연속성)
+    print("💧 유동성 대시보드")
+    plot_liquidity_dashboard()
+    
+    # %%
+    # 지준금/GDP 비율 분석 테스트 (KPDS 스타일)
+    print("📊 지준금/GDP 비율 추이")
+    plot_reserve_gdp_ratio()
+    
+    # %%
+    # 목표 비율이 포함된 분석 (KPDS 스타일)
+    print("🎯 지준금/GDP 비율 vs 목표 10%")
+    plot_reserve_gdp_ratio(target_ratio=10.0, periods=104)
