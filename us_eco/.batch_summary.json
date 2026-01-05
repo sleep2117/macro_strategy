@@ -1,7 +1,25 @@
 [
   {
-    "batch": "batch2",
-    "module": "PPI_analysis_refactor",
+    "batch": "batch5",
+    "module": "retail_sales_refactor",
+    "ok": true,
+    "message": "성공"
+  },
+  {
+    "batch": "batch5",
+    "module": "durable_goods_refactor",
+    "ok": true,
+    "message": "성공"
+  },
+  {
+    "batch": "batch5",
+    "module": "int_trade_refactor",
+    "ok": true,
+    "message": "성공"
+  },
+  {
+    "batch": "batch5",
+    "module": "import_price_refactor_v2",
     "ok": true,
     "message": "성공"
   }
