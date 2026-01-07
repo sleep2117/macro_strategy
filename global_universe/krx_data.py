@@ -56,6 +56,47 @@ def _to_yyyymmdd(dt: datetime | str | None) -> str | None:
     return dt.strftime("%Y%m%d")
 
 
+def _check_krx_access() -> tuple[bool, str | None, bool]:
+    """Probe pykrx index list to detect KRX access/login issues."""
+    try:
+        _ = stock.get_index_ticker_list(market="KOSPI")
+        return True, None, False
+    except Exception as exc:
+        exc_name = type(exc).__name__
+        msg = str(exc)
+        auth_required = exc_name in {"JSONDecodeError", "RequestsJSONDecodeError"}
+        if any(token in msg for token in ["LOGOUT", "로그인", "시장", "지수명"]):
+            auth_required = True
+        reason = "KRX 데이터 접근 불가(로그인 필요)" if auth_required else f"{exc_name}: {msg}"
+        return False, reason, auth_required
+
+
+def _build_skipped_summary(index_map: dict[str, str], reason: str, status: str) -> pd.DataFrame:
+    run_at = datetime.now(ZoneInfo("Asia/Seoul")).isoformat(timespec="seconds")
+    rows = []
+    for code, name in index_map.items():
+        rows.append(
+            {
+                "ticker": code,
+                "name": name,
+                "price_path": None,
+                "price_rows_added": 0,
+                "price_updated": False,
+                "price_status": "skipped",
+                "price_reason": reason,
+                "valuation_path": None,
+                "valuation_rows_added": 0,
+                "valuation_updated": False,
+                "valuation_status": "skipped",
+                "valuation_reason": reason,
+                "status": status,
+                "run_at": run_at,
+            }
+        )
+    print(f"KRX update skipped: {reason}")
+    return pd.DataFrame(rows)
+
+
 def list_krx_index_tickers(market: str = "KOSPI", date: str | None = None) -> pd.DataFrame:
     """Return DataFrame of available index tickers and names for a market.
 
@@ -87,7 +128,10 @@ def fetch_index_ohlcv(ticker: str, start: str | datetime | None = None, end: str
         start = datetime(1990, 1, 1)
     s = _to_yyyymmdd(start)
     e = _to_yyyymmdd(end)
-    df = stock.get_index_ohlcv_by_date(s, e, str(ticker), freq=freq)
+    try:
+        df = stock.get_index_ohlcv_by_date(s, e, str(ticker), freq=freq, name_display=False)
+    except TypeError:
+        df = stock.get_index_ohlcv_by_date(s, e, str(ticker), freq=freq)
     if df is None or df.empty:
         return pd.DataFrame(columns=["Open", "High", "Low", "Close", "Volume"]).astype({})
     # Normalize headers
@@ -438,6 +482,10 @@ def batch_update_indices(index_map: dict[str, str] | None = None, valuation_mode
     """
     if index_map is None:
         index_map = KRX_TEST_INDICES
+    ok, reason, auth_required = _check_krx_access()
+    if not ok:
+        status = "skipped_auth" if auth_required else "skipped_unavailable"
+        return _build_skipped_summary(index_map, reason or "KRX access unavailable", status)
     rows: list[dict] = []
     run_at = datetime.now(ZoneInfo("Asia/Seoul")).isoformat(timespec="seconds")
     for code, name in index_map.items():

@@ -4,6 +4,8 @@ Global indices/sectors/factors universe - data collection utilities only
 
 # Note: file moved under global_universe/ for project organization
 
+from __future__ import annotations
+
 import yfinance as yf
 import requests as _requests
 from requests.adapters import HTTPAdapter as _HTTPAdapter
@@ -358,6 +360,9 @@ investment_universe = {
             'Automobiles':   {'index': None, 'etf': '091180.KS', 'currency': 'KRW', 'valuation_data': True, 'alternatives': []},
         },
         'factors': {
+            'KOSPI':        {'index': '^KS11',  'currency': 'KRW', 'valuation_data': False, 'alternatives': []},
+            'KOSDAQ':       {'index': '^KQ11',  'currency': 'KRW', 'valuation_data': False, 'alternatives': []},
+            'KOSPI200':     {'index': '^KS200','currency': 'KRW', 'valuation_data': False, 'alternatives': []},
             # Korea gov bonds via local ETF (approximation)
             'Gov_Bonds': {'index': None, 'etf': '385560.KS', 'currency': 'KRW', 'valuation_data': True, 'alternatives': ['302190.KS']},
             'Dividend_Growth': {'index': None, 'etf': '211560.KS', 'currency': 'KRW', 'valuation_data': True, 'alternatives': []},
@@ -755,6 +760,9 @@ KOREAN_LABELS = {
         'Dividend_Growth_Global': '글로벌 배당성장',
         'High_Dividend_Global': '글로벌 고배당',
         'Momentum_Developed': '선진국 모멘텀',
+        'KOSPI': '코스피',
+        'KOSDAQ': '코스닥',
+        'KOSPI200': '코스피 200',
         'Quality_Global': '글로벌 퀄리티',
         'IPO_Global': '글로벌 신규상장',
         'Moat_Global': '글로벌 해자',

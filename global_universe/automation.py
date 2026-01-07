@@ -25,16 +25,17 @@ DATA_DIR = Path(__file__).resolve().parent / "data"
 
 PRICE_OK_STATUSES = {"ok", "no_change", "skip", "noop"}
 VALUATION_OK_STATUSES = {"ok", "no_data", "no_change", "noop"}
-KRX_OK_STATUSES = {"ok"}
+KRX_OK_STATUSES = {"ok", "skipped_auth", "skipped_unavailable"}
 
 
-def ensure_dependencies() -> list[str]:
+def ensure_dependencies(include_krx: bool = True) -> list[str]:
     """Return list of missing dependencies required for full updates."""
     missing: list[str] = []
-    try:
-        import pykrx  # noqa: F401
-    except ImportError:
-        missing.append("pykrx")
+    if include_krx:
+        try:
+            import pykrx  # noqa: F401
+        except ImportError:
+            missing.append("pykrx")
     if shutil.which("curl") is None:
         missing.append("curl (system)")
     return missing
@@ -168,8 +169,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--allow-issues", action="store_true", help="Do not fail even if summaries report issues.")
     args = parser.parse_args(argv)
 
+    include_krx = args.mode == "full" and not args.skip_krx
     if args.mode in {"full", "smoke"}:
-        missing = ensure_dependencies()
+        missing = ensure_dependencies(include_krx=include_krx)
         if missing:
             msg = "Missing dependencies: " + ", ".join(missing)
             print(msg, file=sys.stderr)

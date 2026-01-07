@@ -26,4 +26,4 @@ jobs:
 
       - name: Run full verification (with sanitization)
         run: |
-          python -m global_universe.automation --mode full --skip-smoke --lookback 1 --pause 0.1 --valuation-pause 0.1
+          python -m global_universe.automation --mode full --skip-smoke --skip-krx --lookback 1 --pause 0.1 --valuation-pause 0.1
