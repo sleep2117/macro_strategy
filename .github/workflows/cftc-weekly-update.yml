@@ -1,0 +1,61 @@
+name: Weekly CFTC Update
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 21 * * 5" # 06:30 KST Saturday
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: data-update
+      cancel-in-progress: false
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install setuptools
+          pip install -r requirements.txt
+
+      - name: Update CFTC source files
+        run: |
+          python global_universe/cftc/cftc_disagg_update.py
+          python global_universe/cftc/cftc_tff_update.py
+          python global_universe/cftc/ice_europe_update.py
+
+      - name: Build CFTC derived metrics
+        run: |
+          python global_universe/cftc/cftc_disagg_metrics.py --datasets both
+          python global_universe/cftc/cftc_tff_metrics.py --datasets both
+          python global_universe/cftc/ice_europe_metrics.py --datasets both
+
+      - name: Commit and push changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git pull --rebase --autostash origin main
+          if [[ -n "$(git status --porcelain)" ]]; then
+            git add global_universe/cftc
+            git commit -m "chore: weekly CFTC update"
+            for i in 1 2 3; do
+              if git push origin HEAD:main; then
+                break
+              fi
+              git pull --rebase --autostash origin main
+            done
+          else
+            echo "No changes to commit."
+          fi

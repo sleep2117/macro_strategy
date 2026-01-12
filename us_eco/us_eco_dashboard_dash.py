@@ -13,10 +13,9 @@ from typing import Any
 
 import pandas as pd
 import plotly.graph_objects as go
-import plotly.express as px
 
 import dash
-from dash import dcc, html, dash_table, Input, Output, State, no_update
+from dash import dcc, html, dash_table, Input, Output, State, no_update, ALL
 
 try:
     from . import us_eco_utils as utils_module
@@ -63,6 +62,7 @@ CHART_TYPE_LABELS: dict[str, str] = {
     "Dual axis": "dual_axis",
     "Horizontal bar": "horizontal_bar",
     "Vertical bar": "vertical_bar",
+    "Stacked vertical bar": "stacked_vertical_bar",
     "Five year": "five_year",
 }
 
@@ -93,6 +93,9 @@ FRIENDLY_TITLES = {
     "house_sales_stock_refactor": "Housing Sales",
     "personal_income_refactor": "Personal Income",
     "pce_analysis_refactor": "PCE",
+    "pce_contributions_refactor": "PCE Contributions",
+    "supply_demand_pce_inflation_refactor": "Supply/Demand PCE",
+    "nyfed_mct_inflation_refactor": "NY Fed MCT",
     "import_price_refactor_v2": "Import Prices",
     "int_trade_refactor": "Trade",
     "ism_pmi_refactor": "ISM PMI",
@@ -100,6 +103,7 @@ FRIENDLY_TITLES = {
     "fed_balance_sheet_refactor": "Fed Balance Sheet",
     "realtor_housing_inventory_refactor": "Realtor Inventory",
     "unemployment_claims_analysis": "Unemployment Claims",
+    "indeed_jobs": "Indeed Jobs",
     "phillips_curve_enhanced": "Phillips Curve",
     "beveridge_curve_enhanced": "Beveridge Curve",
     "gdp_analysis_refactor": "GDP",
@@ -112,6 +116,9 @@ CATEGORY_MAP: dict[str, list[str]] = {
         "CPI_analysis_refactor",
         "PPI_analysis_refactor",
         "pce_analysis_refactor",
+        "pce_contributions_refactor",
+        "supply_demand_pce_inflation_refactor",
+        "nyfed_mct_inflation_refactor",
         "import_price_refactor_v2",
         "misc_fred_series_refactor",
     ],
@@ -122,8 +129,19 @@ CATEGORY_MAP: dict[str, list[str]] = {
         "JOLTS_employ_refactor",
         "atlanta_wage_growth_refactor",
         "unemployment_claims_analysis",
+        "indeed_jobs",
         "phillips_curve_enhanced",
         "beveridge_curve_enhanced",
+    ],
+    "Production": [
+        "industrial_production_refactor",
+        "durable_goods_refactor",
+        "ism_pmi_refactor",
+        "fed_pmi_refactor",
+    ],
+    "Consumption": [
+        "retail_sales_refactor",
+        "personal_income_refactor",
     ],
     "Housing": [
         "house_price_refactor",
@@ -132,11 +150,14 @@ CATEGORY_MAP: dict[str, list[str]] = {
         "construction_spending_refactor",
         "new_residential_construction_refactor",
     ],
-    "Industry": [
-        "industrial_production_refactor",
-        "retail_sales_refactor",
-        "ism_pmi_refactor",
-        "fed_pmi_refactor",
+    "Trade": [
+        "int_trade_refactor",
+    ],
+    "Financial": [
+        "fed_balance_sheet_refactor",
+    ],
+    "Growth": [
+        "gdp_analysis_refactor",
     ],
 }
 
@@ -324,6 +345,7 @@ def discover_modules() -> list[dict[str, Any]]:
         "us_eco_utils",
         "us_eco_dashboard",
         "us_eco_dashboard_dash",
+        "excel_source_utils",
         "run_batch",
         "cpi_complete_all_series",
     }
@@ -903,6 +925,75 @@ def _create_vertical_bar_chart_simple(
     return _sanitize_plotly_figure(fig)
 
 
+def _create_stacked_vertical_bar_chart(
+    df: pd.DataFrame,
+    axis_title: str,
+    chart_width: int,
+    chart_height: int,
+) -> go.Figure | None:
+    if df is None or df.empty:
+        return None
+
+    fig = go.Figure()
+    for idx, column in enumerate(df.columns):
+        fig.add_trace(
+            go.Bar(
+                x=df.index,
+                y=df[column],
+                name=column,
+                marker_color=get_kpds_color(idx),
+            )
+        )
+
+    fig.update_layout(
+        paper_bgcolor="white",
+        plot_bgcolor="white",
+        width=chart_width,
+        height=chart_height,
+        font=dict(family="NanumGothic", size=FONT_SIZE_GENERAL, color="black"),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.05,
+            xanchor="center",
+            x=0.5,
+            font=dict(family="NanumGothic", size=FONT_SIZE_LEGEND),
+            borderwidth=0,
+            bordercolor="rgba(0,0,0,0)",
+        ),
+        margin=dict(l=60, r=40, t=40, b=60),
+        barmode="relative",
+    )
+
+    fig.update_xaxes(
+        title_text="",
+        showline=True,
+        linewidth=1.3,
+        linecolor="lightgrey",
+        tickwidth=1.3,
+        tickcolor="lightgrey",
+        ticks="outside",
+        showgrid=False,
+    )
+
+    fig.update_yaxes(
+        title_text="",
+        tickformat=",",
+        showline=False,
+        tickcolor="white",
+        showgrid=False,
+    )
+
+    fig = format_date_ticks(fig, "%b-%y", "auto", df.index)
+    fig.add_hline(y=0, line_width=1, line_color="black", opacity=0.5)
+
+    cleaned_title = (axis_title or "").strip()
+    if cleaned_title:
+        _apply_custom_axis_title(fig, "y", cleaned_title)
+
+    return _sanitize_plotly_figure(fig)
+
+
 def _normalize_series(series: pd.Series) -> pd.Series:
     s = pd.to_numeric(series, errors="coerce")
     return s.dropna()
@@ -1320,6 +1411,107 @@ def _series_options_from_registry(registry: dict[str, dict[str, Any]]) -> list[d
     return options
 
 
+def _category_order() -> list[str]:
+    order = list(CATEGORY_MAP.keys())
+    if "Other" not in order:
+        order.append("Other")
+    return order
+
+
+def _build_series_tree(
+    registry: dict[str, dict[str, Any]],
+    default_selected: list[str],
+) -> tuple[list[Any], dict[str, list[str]], list[str]]:
+    grouped: dict[str, dict[str, dict[str, Any]]] = {}
+    for info in registry.values():
+        category = info.get("category", "Other")
+        module_label = info.get("module_label", "")
+        stem = info.get("stem", "")
+        group_key = f"{category}::{stem}"
+        grouped.setdefault(category, {})
+        grouped[category].setdefault(
+            group_key,
+            {
+                "stem": stem,
+                "module_label": module_label,
+                "series": [],
+            },
+        )
+        grouped[category][group_key]["series"].append(info)
+
+    tree_nodes: list[Any] = []
+    group_series_map: dict[str, list[str]] = {}
+    series_order: list[str] = []
+
+    for category in _category_order():
+        modules = grouped.get(category, {})
+        if not modules:
+            continue
+        module_nodes: list[Any] = []
+        category_series: list[str] = []
+        module_items = sorted(modules.items(), key=lambda item: item[1]["module_label"])
+        for group_key, module_info in module_items:
+            series_items = sorted(module_info["series"], key=lambda item: item.get("series_label", ""))
+            group_series = [item["key"] for item in series_items]
+            group_series_map[group_key] = group_series
+            series_order.extend(group_series)
+            category_series.extend(group_series)
+            options = [
+                {"label": item.get("series_label", ""), "value": item["key"]}
+                for item in series_items
+            ]
+            selected = [key for key in group_series if key in default_selected]
+            module_nodes.append(
+                html.Details(
+                    [
+                        html.Summary(f"{module_info['module_label']} ({len(options)})"),
+                        html.Div(
+                            [
+                                html.Button(
+                                    "Clear",
+                                    id={"type": "series-tree-clear", "key": group_key},
+                                    className="btn btn-ghost btn-mini",
+                                )
+                            ],
+                            className="tree-actions",
+                        ),
+                        dcc.Checklist(
+                            id={"type": "series-tree", "key": group_key},
+                            options=options,
+                            value=selected,
+                            className="tree-checklist",
+                        ),
+                    ],
+                    className="tree-module",
+                )
+            )
+        total_count = sum(len(module_info["series"]) for module_info in modules.values())
+        category_key = f"category::{category}"
+        group_series_map[category_key] = category_series
+        tree_nodes.append(
+            html.Details(
+                [
+                    html.Summary(f"{category} ({total_count})"),
+                    html.Div(
+                        [
+                            html.Button(
+                                "Clear category",
+                                id={"type": "series-tree-clear", "key": category_key},
+                                className="btn btn-ghost btn-mini",
+                            )
+                        ],
+                        className="tree-actions",
+                    ),
+                    html.Div(module_nodes, className="tree-module-list"),
+                ],
+                className="tree-category",
+                open=True,
+            )
+        )
+
+    return tree_nodes, group_series_map, series_order
+
+
 def _collect_selected_infos(
     selected_keys: list[str] | None,
     registry: dict[str, dict[str, Any]],
@@ -1331,73 +1523,6 @@ def _collect_selected_infos(
             infos.append(dict(info))
     return infos
 
-
-
-def _build_long_dataframe(selected_infos: list[dict[str, Any]], dtype_key: str) -> pd.DataFrame:
-    frames: list[pd.DataFrame] = []
-    for info in selected_infos:
-        meta = info["meta"]
-        data_dict = meta.get("data_dict") or ensure_module_data(meta)
-        if not _data_dict_ready(data_dict):
-            continue
-        source_df = data_dict.get(dtype_key)
-        if not isinstance(source_df, pd.DataFrame):
-            continue
-        series_name = info["series_name"]
-        if series_name not in source_df.columns:
-            continue
-        series_data = pd.to_numeric(source_df[series_name], errors="coerce")
-        index = source_df.index
-        if not isinstance(index, pd.DatetimeIndex):
-            index = pd.to_datetime(index, errors="coerce")
-        frame = pd.DataFrame(
-            {
-                "date": index,
-                "value": series_data.values,
-                "series": series_name,
-                "series_label": info.get("series_label", series_name),
-                "display_label": info.get("display_label", series_name),
-                "module": info.get("module_label", info.get("stem", "")),
-                "category": info.get("category", ""),
-                "data_type": dtype_key.replace("_data", ""),
-                "unit": info.get("unit", ""),
-            }
-        )
-        frames.append(frame)
-    if not frames:
-        return pd.DataFrame()
-    combined = pd.concat(frames, ignore_index=True)
-    combined = combined.dropna(subset=["date"])
-    return combined
-
-
-def _bi_field_panel(df: pd.DataFrame) -> html.Div:
-    if df is None or df.empty:
-        return html.Div("No fields available.")
-    rows = [{"field": col, "dtype": str(df[col].dtype)} for col in df.columns]
-    return html.Div(
-        dash_table.DataTable(
-            data=rows,
-            columns=[
-                {"name": "Field", "id": "field"},
-                {"name": "Type", "id": "dtype"},
-            ],
-            page_size=10,
-            style_table={"overflowY": "auto", "maxHeight": "260px"},
-            style_cell={"textAlign": "left", "padding": "6px"},
-            style_header={"fontWeight": "600"},
-        )
-    )
-
-
-def _bi_field_options(df: pd.DataFrame) -> tuple[list[str], list[str]]:
-    if df is None or df.empty:
-        return [], []
-    fields = [col for col in df.columns]
-    numeric_fields = [
-        col for col in fields if pd.api.types.is_numeric_dtype(df[col])
-    ]
-    return fields, numeric_fields
 
 
 def _build_table_rows(
@@ -1647,6 +1772,13 @@ def _build_figure(
             chart_width,
             chart_height,
         )
+    elif chart_type == "stacked_vertical_bar":
+        fig = _create_stacked_vertical_bar_chart(
+            combined_df,
+            single_axis_title,
+            chart_width,
+            chart_height,
+        )
     elif chart_type == "dual_axis":
         labels = list(combined_df.columns)
         axis_allocation = {"left": [], "right": []}
@@ -1749,11 +1881,10 @@ for info in MODULE_INFOS:
 
 SERIES_REGISTRY, DEFAULT_SERIES_SELECTION = build_series_registry(MODULE_METAS)
 SERIES_OPTIONS = _series_options_from_registry(SERIES_REGISTRY)
-BI_MODULE_OPTIONS = [
-    {"label": meta.get("friendly_title", meta.get("stem", "")), "value": meta.get("stem", "")}
-    for meta in MODULE_METAS
-    if meta.get("stem")
-]
+SERIES_TREE_LAYOUT, SERIES_TREE_GROUPS, SERIES_TREE_SERIES_ORDER = _build_series_tree(
+    SERIES_REGISTRY,
+    DEFAULT_SERIES_SELECTION,
+)
 PRESET_CACHE: dict[str, Any] = load_dashboard_presets()
 
 
@@ -1797,14 +1928,19 @@ app.layout = html.Div(
                     className="side-panel card",
                     children=[
                         html.Div("Controls", className="card-title"),
-                        html.Label("Series"),
-                        dcc.Dropdown(
-                            id="series-select",
-                            options=SERIES_OPTIONS,
-                            value=DEFAULT_SERIES_SELECTION,
-                            multi=True,
-                            placeholder="Select series",
+                        html.Label("Series tree"),
+                        html.Div("Browse by category", className="helper-text"),
+                        html.Div(
+                            [
+                                html.Button(
+                                    "Clear all",
+                                    id="series-clear-all",
+                                    className="btn btn-ghost btn-mini",
+                                )
+                            ],
+                            className="tree-actions",
                         ),
+                        html.Div(SERIES_TREE_LAYOUT, className="series-tree"),
                         html.Label("Default data type", style={"marginTop": "10px"}),
                         dcc.Dropdown(
                             id="global-dtype",
@@ -1904,66 +2040,14 @@ app.layout = html.Div(
                         html.Button("Save", id="preset-save-btn", className="btn btn-primary"),
                         html.Div(id="preset-message", className="preset-message"),
                         html.Hr(className="divider"),
-                        html.Div("BI Builder", className="card-title"),
-                        html.Label("BI modules"),
+                        html.Label("Series search"),
                         dcc.Dropdown(
-                            id="bi-module-select",
-                            options=BI_MODULE_OPTIONS,
-                            value=[DEFAULT_MODULE_FOR_SELECTION] if DEFAULT_MODULE_FOR_SELECTION else [],
-                            multi=True,
-                            placeholder="Select modules",
-                        ),
-                        html.Label("BI series", style={"marginTop": "10px"}),
-                        dcc.Dropdown(
-                            id="bi-series-select",
-                            options=[],
-                            value=[],
+                            id="series-select",
+                            options=SERIES_OPTIONS,
+                            value=DEFAULT_SERIES_SELECTION,
                             multi=True,
                             placeholder="Select series",
-                        ),
-                        html.Label("BI data type", style={"marginTop": "10px"}),
-                        dcc.Dropdown(
-                            id="bi-dtype-select",
-                            options=[
-                                {"label": label, "value": key} for key, label in STANDARD_DATA_KEYS
-                            ],
-                            value="raw_data",
-                            clearable=False,
-                        ),
-                        html.Label("Lookback (months)", style={"marginTop": "10px"}),
-                        dcc.Slider(
-                            id="bi-lookback",
-                            min=6,
-                            max=120,
-                            step=6,
-                            value=60,
-                            marks={i: str(i) for i in range(12, 121, 12)},
-                        ),
-                        html.Label("BI chart", style={"marginTop": "10px"}),
-                        dcc.Dropdown(
-                            id="bi-chart-type",
-                            options=[
-                                {"label": "Line", "value": "line"},
-                                {"label": "Bar", "value": "bar"},
-                                {"label": "Scatter", "value": "scatter"},
-                                {"label": "Area", "value": "area"},
-                                {"label": "Box", "value": "box"},
-                            ],
-                            value="line",
-                            clearable=False,
-                        ),
-                        html.Label("Aggregation", style={"marginTop": "10px"}),
-                        dcc.Dropdown(
-                            id="bi-agg",
-                            options=[
-                                {"label": "None", "value": "none"},
-                                {"label": "Mean", "value": "mean"},
-                                {"label": "Sum", "value": "sum"},
-                                {"label": "Median", "value": "median"},
-                                {"label": "Last", "value": "last"},
-                            ],
-                            value="none",
-                            clearable=False,
+                            className="series-select",
                         ),
 
                     ],
@@ -2301,77 +2385,6 @@ app.layout = html.Div(
                                 ),
                             ],
                         ),
-                        html.Div(
-                            className="card bi-card",
-                            children=[
-                                html.Div("BI Builder", className="card-title"),
-                                html.Div(id="bi-status", className="status-message"),
-                                html.Div(
-                                    className="bi-layout",
-                                    style={"display": "grid", "gridTemplateColumns": "1fr 1fr", "gap": "16px"},
-                                    children=[
-                                        html.Div(
-                                            className="bi-field-panel",
-                                            children=[
-                                                html.Div("Field panel", className="card-title"),
-                                                html.Div(id="bi-field-panel"),
-                                            ],
-                                        ),
-                                        html.Div(
-                                            className="bi-drop-panel",
-                                            children=[
-                                                html.Div("Drop zones", className="card-title"),
-                                                html.Label("X"),
-                                                dcc.Dropdown(id="bi-x", options=[], value=None, clearable=False),
-                                                html.Label("Y", style={"marginTop": "8px"}),
-                                                dcc.Dropdown(id="bi-y", options=[], value=None, clearable=False),
-                                                html.Label("Color", style={"marginTop": "8px"}),
-                                                dcc.Dropdown(id="bi-color", options=[], value=None, clearable=True),
-                                                html.Label("Size", style={"marginTop": "8px"}),
-                                                dcc.Dropdown(id="bi-size", options=[], value=None, clearable=True),
-                                                html.Label("Facet row", style={"marginTop": "8px"}),
-                                                dcc.Dropdown(id="bi-facet-row", options=[], value=None, clearable=True),
-                                                html.Label("Facet col", style={"marginTop": "8px"}),
-                                                dcc.Dropdown(id="bi-facet-col", options=[], value=None, clearable=True),
-                                            ],
-                                        ),
-                                    ],
-                                ),
-                                dcc.Graph(
-                                    id="bi-chart",
-                                    config={"displaylogo": False},
-                                ),
-                                html.Details(
-                                    open=False,
-                                    children=[
-                                        html.Summary("BI data preview", className="card-title"),
-                                        dash_table.DataTable(
-                                            id="bi-table",
-                                            data=[],
-                                            columns=[],
-                                            page_size=10,
-                                            style_table={
-                                                "overflowX": "auto",
-                                                "height": "240px",
-                                                "overflowY": "auto",
-                                            },
-                                            style_cell={
-                                                "textAlign": "left",
-                                                "padding": "6px",
-                                                "minWidth": "90px",
-                                            },
-                                            style_data_conditional=[
-                                                {"if": {"row_index": "odd"}, "backgroundColor": "#f6f2ea"}
-                                            ],
-                                            style_header={
-                                                "fontWeight": "600",
-                                                "backgroundColor": "#efe9dd",
-                                            },
-                                        ),
-                                    ],
-                                ),
-                            ],
-                        ),
                     ],
                 ),
             ],
@@ -2381,6 +2394,67 @@ app.layout = html.Div(
         dcc.Download(id="download-data"),
     ],
 )
+
+
+@app.callback(
+    Output({"type": "series-tree", "key": ALL}, "value"),
+    Input("series-select", "value"),
+)
+def sync_tree_from_series_select(selected_keys):
+    selected_set = set(selected_keys or [])
+    ctx = dash.callback_context
+    outputs = ctx.outputs_list
+    if outputs and isinstance(outputs[0], list):
+        outputs = outputs[0]
+    values: list[list[str]] = []
+    for output in outputs or []:
+        output_id = output.get("id", {})
+        group_key = output_id.get("key")
+        group_series = SERIES_TREE_GROUPS.get(group_key, [])
+        values.append([key for key in group_series if key in selected_set])
+    return values
+
+
+@app.callback(
+    Output("series-select", "value", allow_duplicate=True),
+    Input({"type": "series-tree", "key": ALL}, "value"),
+    Input("series-clear-all", "n_clicks"),
+    Input({"type": "series-tree-clear", "key": ALL}, "n_clicks"),
+    State("series-select", "value"),
+    prevent_initial_call=True,
+)
+def sync_series_select_from_tree(tree_values, clear_all_clicks, clear_group_clicks, current_selection):
+    ctx = dash.callback_context
+    triggered_id = getattr(ctx, "triggered_id", None)
+
+    current_selection = list(current_selection or [])
+
+    if triggered_id == "series-clear-all":
+        return []
+
+    if isinstance(triggered_id, dict) and triggered_id.get("type") == "series-tree-clear":
+        group_key = triggered_id.get("key")
+        remove_keys = SERIES_TREE_GROUPS.get(group_key, [])
+        if not remove_keys:
+            return no_update
+        updated = [key for key in current_selection if key not in remove_keys]
+        if updated == current_selection:
+            return no_update
+        return updated
+
+    selected_set: set[str] = set()
+    for values in tree_values or []:
+        if values:
+            selected_set.update(values)
+
+    ordered = [key for key in current_selection if key in selected_set]
+    for key in SERIES_TREE_SERIES_ORDER:
+        if key in selected_set and key not in ordered:
+            ordered.append(key)
+
+    if ordered == current_selection:
+        return no_update
+    return ordered
 
 
 @app.callback(
@@ -2885,199 +2959,6 @@ def handle_presets(
         return defaults
 
     return defaults
-
-
-@app.callback(
-    Output("bi-series-select", "options"),
-    Output("bi-series-select", "value"),
-    Input("bi-module-select", "value"),
-    State("bi-series-select", "value"),
-)
-def update_bi_series_options(selected_modules, current_values):
-    if not selected_modules:
-        return [], []
-    options = []
-    for key, info in SERIES_REGISTRY.items():
-        if info.get("stem") in selected_modules:
-            options.append({"label": info.get("display_label", key), "value": key})
-    options = sorted(options, key=lambda item: item["label"])
-    allowed = {opt["value"] for opt in options}
-    current_values = current_values or []
-    next_values = [val for val in current_values if val in allowed]
-    if not next_values:
-        defaults = [key for key in DEFAULT_SERIES_SELECTION if key in allowed]
-        if defaults:
-            next_values = defaults
-        elif options:
-            next_values = [options[0]["value"]]
-    return options, next_values
-
-
-@app.callback(
-    Output("bi-field-panel", "children"),
-    Output("bi-x", "options"),
-    Output("bi-x", "value"),
-    Output("bi-y", "options"),
-    Output("bi-y", "value"),
-    Output("bi-color", "options"),
-    Output("bi-color", "value"),
-    Output("bi-size", "options"),
-    Output("bi-size", "value"),
-    Output("bi-facet-row", "options"),
-    Output("bi-facet-row", "value"),
-    Output("bi-facet-col", "options"),
-    Output("bi-facet-col", "value"),
-    Input("bi-series-select", "value"),
-    Input("bi-dtype-select", "value"),
-    State("bi-x", "value"),
-    State("bi-y", "value"),
-    State("bi-color", "value"),
-    State("bi-size", "value"),
-    State("bi-facet-row", "value"),
-    State("bi-facet-col", "value"),
-)
-def update_bi_fields(selected_keys, dtype_key, x_value, y_value, color_value, size_value, facet_row_value, facet_col_value):
-    selected_infos = _collect_selected_infos(selected_keys, SERIES_REGISTRY)
-    dtype_key = dtype_key or "raw_data"
-    df_long = _build_long_dataframe(selected_infos, dtype_key)
-    if df_long.empty:
-        empty_panel = html.Div("No data available.")
-        return empty_panel, [], None, [], None, [], None, [], None, [], None, [], None
-
-    panel = _bi_field_panel(df_long)
-    fields, numeric_fields = _bi_field_options(df_long)
-    field_options = [{"label": col, "value": col} for col in fields]
-    numeric_options = [{"label": col, "value": col} for col in numeric_fields]
-
-    x_next = x_value if x_value in fields else ("date" if "date" in fields else fields[0])
-    y_next = y_value if y_value in numeric_fields else ("value" if "value" in numeric_fields else numeric_fields[0])
-    color_next = color_value if color_value in fields else ("display_label" if "display_label" in fields else None)
-    size_next = size_value if size_value in numeric_fields else None
-    facet_row_next = facet_row_value if facet_row_value in fields else None
-    facet_col_next = facet_col_value if facet_col_value in fields else None
-
-    return (
-        panel,
-        field_options,
-        x_next,
-        numeric_options if numeric_options else field_options,
-        y_next,
-        field_options,
-        color_next,
-        numeric_options,
-        size_next,
-        field_options,
-        facet_row_next,
-        field_options,
-        facet_col_next,
-    )
-
-
-@app.callback(
-    Output("bi-chart", "figure"),
-    Output("bi-table", "data"),
-    Output("bi-table", "columns"),
-    Output("bi-status", "children"),
-    Input("bi-series-select", "value"),
-    Input("bi-dtype-select", "value"),
-    Input("bi-lookback", "value"),
-    Input("bi-x", "value"),
-    Input("bi-y", "value"),
-    Input("bi-color", "value"),
-    Input("bi-size", "value"),
-    Input("bi-facet-row", "value"),
-    Input("bi-facet-col", "value"),
-    Input("bi-chart-type", "value"),
-    Input("bi-agg", "value"),
-)
-def update_bi_chart(
-    selected_keys,
-    dtype_key,
-    lookback,
-    x_field,
-    y_field,
-    color_field,
-    size_field,
-    facet_row,
-    facet_col,
-    chart_type,
-    agg_method,
-):
-    if not selected_keys:
-        fig = _make_empty_figure("Select series to start.")
-        fig.update_layout(height=520)
-        return fig, [], [], "Select series to start."
-
-    selected_infos = _collect_selected_infos(selected_keys, SERIES_REGISTRY)
-    dtype_key = dtype_key or "raw_data"
-    df_long = _build_long_dataframe(selected_infos, dtype_key)
-    if df_long.empty:
-        fig = _make_empty_figure("No data available.")
-        fig.update_layout(height=520)
-        return fig, [], [], "No data available."
-
-    if lookback:
-        latest_date = df_long["date"].max()
-        if pd.notna(latest_date):
-            cutoff = latest_date - pd.DateOffset(months=int(lookback))
-            df_long = df_long[df_long["date"] >= cutoff]
-
-    if df_long.empty:
-        fig = _make_empty_figure("No data after filters.")
-        fig.update_layout(height=520)
-        return fig, [], [], "No data after filters."
-
-    df_plot = df_long.copy()
-    if agg_method and agg_method != "none":
-        group_cols = [col for col in [x_field, color_field, facet_row, facet_col] if col]
-        if group_cols:
-            if agg_method == "last":
-                df_plot = (
-                    df_plot.sort_values(x_field)
-                    .groupby(group_cols, dropna=False)[y_field]
-                    .last()
-                    .reset_index()
-                )
-            else:
-                df_plot = (
-                    df_plot.groupby(group_cols, dropna=False)[y_field]
-                    .agg(agg_method)
-                    .reset_index()
-                )
-
-    if x_field in df_plot.columns:
-        df_plot = df_plot.sort_values(x_field)
-
-    fig = None
-    color_arg = color_field or None
-    size_arg = size_field or None
-    facet_row_arg = facet_row or None
-    facet_col_arg = facet_col or None
-
-    if chart_type == "line":
-        fig = px.line(df_plot, x=x_field, y=y_field, color=color_arg, facet_row=facet_row_arg, facet_col=facet_col_arg)
-    elif chart_type == "bar":
-        fig = px.bar(df_plot, x=x_field, y=y_field, color=color_arg, facet_row=facet_row_arg, facet_col=facet_col_arg, barmode="group")
-    elif chart_type == "scatter":
-        fig = px.scatter(df_plot, x=x_field, y=y_field, color=color_arg, size=size_arg, facet_row=facet_row_arg, facet_col=facet_col_arg)
-    elif chart_type == "area":
-        fig = px.area(df_plot, x=x_field, y=y_field, color=color_arg, facet_row=facet_row_arg, facet_col=facet_col_arg)
-    elif chart_type == "box":
-        fig = px.box(df_plot, x=x_field, y=y_field, color=color_arg, facet_row=facet_row_arg, facet_col=facet_col_arg)
-    else:
-        fig = px.line(df_plot, x=x_field, y=y_field, color=color_arg)
-
-    fig.update_layout(template="plotly_white", height=520)
-
-    preview = df_plot.copy()
-    if "date" in preview.columns:
-        preview["date"] = preview["date"].dt.strftime("%Y-%m-%d")
-    preview = preview.head(200)
-    table_data = preview.to_dict("records")
-    table_columns = [{"name": col, "id": col} for col in preview.columns]
-
-    status = f"Rows: {len(df_plot):,}" if df_plot is not None else ""
-    return fig, table_data, table_columns, status
 
 
 app.clientside_callback(

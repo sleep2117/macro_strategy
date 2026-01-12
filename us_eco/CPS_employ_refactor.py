@@ -594,7 +594,22 @@ CPS_CATEGORIES = {
 # %%
 # === 전역 변수 ===
 CSV_FILE_PATH = data_path('cps_data.csv')
-CPS_DATA = {}
+CPS_DATA = {
+    "raw_data": pd.DataFrame(),
+    "mom_data": pd.DataFrame(),
+    "mom_change": pd.DataFrame(),
+    "yoy_data": pd.DataFrame(),
+    "yoy_change": pd.DataFrame(),
+    "latest_values": {},
+    "load_info": {
+        "loaded": False,
+        "load_time": None,
+        "start_date": None,
+        "series_count": 0,
+        "data_points": 0,
+        "source": None,
+    },
+}
 
 # %%
 # === 데이터 로드 함수 ===
@@ -643,7 +658,7 @@ def print_load_info():
 def plot_cps_series_advanced(series_list, chart_type='multi_line', 
                             data_type='mom', periods=None, target_date=None):
     """범용 CPS 시각화 함수 - plot_economic_series 활용"""
-    if not CPS_DATA:
+    if not CPS_DATA or not CPS_DATA.get('load_info', {}).get('loaded'):
         print("⚠️ 먼저 load_cps_data()를 실행하세요.")
         return None
 
@@ -662,7 +677,7 @@ def plot_cps_series_advanced(series_list, chart_type='multi_line',
 def export_cps_data(series_list, data_type='mom', periods=None, 
                    target_date=None, export_path=None, file_format='excel'):
     """CPS 데이터 export 함수 - export_economic_data 활용"""
-    if not CPS_DATA:
+    if not CPS_DATA or not CPS_DATA.get('load_info', {}).get('loaded'):
         print("⚠️ 먼저 load_cps_data()를 실행하세요.")
         return None
 
@@ -688,7 +703,7 @@ def clear_cps_data():
 
 def get_raw_data(series_names=None):
     """원본 레벨 데이터 반환"""
-    if not CPS_DATA or 'raw_data' not in CPS_DATA:
+    if not CPS_DATA or not CPS_DATA.get('load_info', {}).get('loaded') or 'raw_data' not in CPS_DATA:
         print("⚠️ 데이터가 로드되지 않았습니다. load_cps_data()를 먼저 실행하세요.")
         return pd.DataFrame()
     
@@ -704,7 +719,7 @@ def get_raw_data(series_names=None):
 
 def get_mom_data(series_names=None):
     """전월대비 변화 데이터 반환"""
-    if not CPS_DATA or 'mom_data' not in CPS_DATA:
+    if not CPS_DATA or not CPS_DATA.get('load_info', {}).get('loaded') or 'mom_data' not in CPS_DATA:
         print("⚠️ 데이터가 로드되지 않았습니다. load_cps_data()를 먼저 실행하세요.")
         return pd.DataFrame()
     
@@ -720,7 +735,7 @@ def get_mom_data(series_names=None):
 
 def get_yoy_data(series_names=None):
     """전년동월대비 변화 데이터 반환"""
-    if not CPS_DATA or 'yoy_data' not in CPS_DATA:
+    if not CPS_DATA or not CPS_DATA.get('load_info', {}).get('loaded') or 'yoy_data' not in CPS_DATA:
         print("⚠️ 데이터가 로드되지 않았습니다. load_cps_data()를 먼저 실행하세요.")
         return pd.DataFrame()
     
@@ -736,7 +751,7 @@ def get_yoy_data(series_names=None):
 
 def list_available_series():
     """사용 가능한 시리즈 목록 반환"""
-    if not CPS_DATA or 'raw_data' not in CPS_DATA:
+    if not CPS_DATA or not CPS_DATA.get('load_info', {}).get('loaded') or 'raw_data' not in CPS_DATA:
         return []
     return list(CPS_DATA['raw_data'].columns)
 

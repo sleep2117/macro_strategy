@@ -110,6 +110,9 @@ FRIENDLY_TITLES = {
     "house_sales_stock_refactor": "주택 판매/재고",
     "personal_income_refactor": "개인소득",
     "pce_analysis_refactor": "PCE",
+    "pce_contributions_refactor": "PCE Contributions",
+    "supply_demand_pce_inflation_refactor": "Supply/Demand PCE",
+    "nyfed_mct_inflation_refactor": "NY Fed MCT",
     "import_price_refactor_v2": "수입물가",
     "int_trade_refactor": "무역",
     "ism_pmi_refactor": "ISM PMI",
@@ -117,6 +120,7 @@ FRIENDLY_TITLES = {
     "fed_balance_sheet_refactor": "연준 대차대조표",
     "realtor_housing_inventory_refactor": "리얼터 주택재고",
     "unemployment_claims_analysis": "실업보험청구",
+    "indeed_jobs": "Indeed Jobs",
     "phillips_curve_enhanced": "필립스 곡선",
     "beveridge_curve_enhanced": "베버리지 곡선",
     "gdp_analysis_refactor": "GDP",
@@ -130,6 +134,9 @@ CATEGORY_MAP: dict[str, list[str]] = {
         "CPI_analysis_refactor",
         "PPI_analysis_refactor",
         "pce_analysis_refactor",
+        "pce_contributions_refactor",
+        "supply_demand_pce_inflation_refactor",
+        "nyfed_mct_inflation_refactor",
         "import_price_refactor_v2",
         "misc_fred_series_refactor",
     ],
@@ -140,6 +147,7 @@ CATEGORY_MAP: dict[str, list[str]] = {
         "JOLTS_employ_refactor",
         "atlanta_wage_growth_refactor",
         "unemployment_claims_analysis",
+        "indeed_jobs",
         "phillips_curve_enhanced",
         "beveridge_curve_enhanced",
     ],
@@ -1416,7 +1424,14 @@ def _render_beveridge_curves(
 
 def discover_modules() -> list[dict[str, Any]]:
     module_dir = Path(__file__).parent
-    exclude = {"us_eco_utils", "us_eco_dashboard", "cpi_complete_all_series"}
+    exclude = {
+        "us_eco_utils",
+        "us_eco_dashboard",
+        "us_eco_dashboard_dash",
+        "excel_source_utils",
+        "run_batch",
+        "cpi_complete_all_series",
+    }
     modules: list[dict[str, Any]] = []
     for path in sorted(module_dir.glob("*.py")):
         stem = path.stem
