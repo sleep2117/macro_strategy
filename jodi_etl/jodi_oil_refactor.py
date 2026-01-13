@@ -19,6 +19,9 @@ Examples of codes:
 import os
 import sys
 import json
+from functools import lru_cache
+from io import StringIO
+import socket
 import pandas as pd
 import numpy as np
 from datetime import datetime, date
@@ -27,6 +30,9 @@ from typing import Optional, Any
 import plotly.graph_objects as go
 from pathlib import Path
 from types import SimpleNamespace
+
+import dash
+from dash import dcc, html, dash_table, Input, Output, State, no_update
 
 try:
     from jodi_etl import cli as jodi_cli
@@ -80,13 +86,6 @@ except ImportError:
         create_five_year_comparison_chart,
     )
 
-try:
-    from streamlit_tree_select import tree_select  # type: ignore
-    TREE_AVAILABLE = True
-except Exception:
-    TREE_AVAILABLE = False
-
-
 # -----------------------------------------------------------------------------
 # Paths and constants
 # -----------------------------------------------------------------------------
@@ -114,6 +113,16 @@ try:  # prefer feather/arrow cache when available
 except ModuleNotFoundError:
     CACHE_BACKEND = "pickle"
     CACHE_EXT = ".pkl"
+
+DASH_CACHE_VERSION = "v2"
+DASH_CACHE_DIR = os.path.join(JODI_DATA_DIR, "_dash_cache")
+DASH_CACHE_BACKEND = "feather" if CACHE_BACKEND == "feather" else "pickle"
+DASH_CACHE_EXT = ".feather" if DASH_CACHE_BACKEND == "feather" else ".pkl"
+DASH_CACHE_META_FILE = os.path.join(DASH_CACHE_DIR, f"jodi_dash_meta_{DASH_CACHE_VERSION}.pkl")
+DASH_CACHE_WIDE_FILE = os.path.join(DASH_CACHE_DIR, f"jodi_dash_wide_{DASH_CACHE_VERSION}{DASH_CACHE_EXT}")
+DASH_CACHE_COMBOS_FILE = os.path.join(DASH_CACHE_DIR, f"jodi_dash_combos_{DASH_CACHE_VERSION}{DASH_CACHE_EXT}")
+LEGACY_DASH_CACHE_FILE = os.path.join(DASH_CACHE_DIR, "jodi_dash_cache_v1.pkl")
+DASH_CACHE_FILE = LEGACY_DASH_CACHE_FILE  # Backward compat for older cache checks.
 
 try:
     from babel import Locale
@@ -287,25 +296,6 @@ def save_jodi_presets(presets: dict[str, Any]) -> None:
         print(f"⚠️ 프리셋 저장 실패: {exc}")
 
 
-def _trigger_rerun() -> None:
-    try:
-        import streamlit as st
-
-        rerun_candidate = getattr(st, "experimental_rerun", None)
-        if callable(rerun_candidate):
-            rerun_candidate()
-            return
-        rerun_candidate = getattr(st, "rerun", None)
-        if callable(rerun_candidate):
-            rerun_candidate()
-            return
-        from streamlit.runtime.scriptrunner import RerunException, RerunData  # type: ignore
-
-        raise RerunException(RerunData(None))
-    except Exception as exc:
-        print(f"⚠️ rerun 호출 실패: {exc}")
-
-
 def _update_jodi_data(outdir: str) -> tuple[bool, str]:
     if jodi_cli is None:
         return False, "데이터 업데이트 모듈(jodi_etl.cli)을 불러올 수 없습니다."
@@ -325,131 +315,6 @@ def _update_jodi_data(outdir: str) -> tuple[bool, str]:
 
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
     return True, f"데이터 업데이트가 완료되었습니다. ({timestamp})"
-
-
-def apply_jodi_preset(preset: dict[str, Any], registry: dict[str, dict[str, Any]]) -> bool:
-    import streamlit as st
-
-    if not preset:
-        st.session_state["jodi_preset_error"] = "프리셋 데이터가 비어 있습니다."
-        return False
-
-    series_keys = [key for key in preset.get("series_keys", []) if isinstance(key, str)]
-    if not series_keys:
-        st.session_state["jodi_preset_error"] = "프리셋에 저장된 시리즈가 없습니다."
-        return False
-
-    available_keys = [key for key in series_keys if key in registry]
-    missing_keys = [key for key in series_keys if key not in registry]
-    if not available_keys:
-        st.session_state["jodi_preset_error"] = "프리셋에 포함된 시리즈를 찾을 수 없습니다."
-        return False
-
-    if missing_keys:
-        st.session_state["jodi_preset_warning"] = {
-            "name": preset.get("name"),
-            "missing": missing_keys,
-        }
-
-    st.session_state.pop("jodi_preset_error", None)
-
-    st.session_state["jodi_selection"] = list(available_keys)
-    st.session_state["jodi_series_selection"] = list(available_keys)
-    st.session_state["jodi_selection_version"] = st.session_state.get("jodi_selection_version", 0) + 1
-    st.session_state["jodi_selection_source"] = "preset"
-
-    custom_labels = {
-        key: value
-        for key, value in (preset.get("custom_labels") or {}).items()
-        if isinstance(key, str) and isinstance(value, str)
-    }
-    st.session_state["jodi_custom_labels"] = dict(custom_labels)
-
-    for session_key in list(st.session_state.keys()):
-        if session_key.startswith("jodi_custom_label_input_"):
-            base_key = session_key.replace("jodi_custom_label_input_", "", 1)
-            if base_key not in custom_labels:
-                st.session_state.pop(session_key, None)
-    for key, label in custom_labels.items():
-        st.session_state[f"jodi_custom_label_input_{key}"] = label
-
-    dtype_key = preset.get("global_dtype_key")
-    if dtype_key:
-        st.session_state["jodi_dtype_key"] = dtype_key
-
-    per_override = bool(preset.get("per_series_override"))
-    st.session_state["jodi_dtype_override"] = per_override
-
-    dtype_map = preset.get("dtype_map", {}) or {}
-    for session_key in list(st.session_state.keys()):
-        if session_key.startswith("jodi_dtype_override_"):
-            base_key = session_key.replace("jodi_dtype_override_", "", 1)
-            if base_key not in dtype_map:
-                st.session_state.pop(session_key, None)
-    for key, value in dtype_map.items():
-        if isinstance(key, str) and isinstance(value, str):
-            st.session_state[f"jodi_dtype_override_{key}"] = value
-
-    chart_type_code = preset.get("chart_type")
-    if chart_type_code:
-        st.session_state["jodi_chart_type"] = chart_type_code
-
-    chart_width = preset.get("chart_width_cm")
-    chart_height = preset.get("chart_height_cm")
-    if chart_width is not None:
-        st.session_state["jodi_chart_width"] = float(chart_width)
-    if chart_height is not None:
-        st.session_state["jodi_chart_height"] = float(chart_height)
-
-    st.session_state["jodi_single_axis_title"] = preset.get("single_axis_title", "")
-    st.session_state["jodi_left_axis_title"] = preset.get("left_axis_title", "")
-    st.session_state["jodi_right_axis_title"] = preset.get("right_axis_title", "")
-
-    st.session_state["jodi_left_title_offset"] = float(preset.get("left_title_offset", 0.0))
-    st.session_state["jodi_right_title_offset"] = float(preset.get("right_title_offset", 0.0))
-
-    st.session_state["jodi_dual_left"] = list(preset.get("dual_axis_left", []) or [])
-    st.session_state["jodi_dual_right"] = list(preset.get("dual_axis_right", []) or [])
-
-    single_manual = bool(preset.get("single_axis_manual_range"))
-    st.session_state["jodi_single_axis_manual_range"] = single_manual
-    if single_manual:
-        rng = preset.get("single_axis_range")
-        if isinstance(rng, (list, tuple)) and len(rng) == 2:
-            try:
-                st.session_state["jodi_single_axis_min"] = float(rng[0])
-                st.session_state["jodi_single_axis_max"] = float(rng[1])
-            except (TypeError, ValueError):
-                pass
-
-    left_manual = bool(preset.get("left_axis_manual_range"))
-    st.session_state["jodi_left_axis_manual_range"] = left_manual
-    if left_manual:
-        rng = preset.get("left_axis_range")
-        if isinstance(rng, (list, tuple)) and len(rng) == 2:
-            try:
-                st.session_state["jodi_left_axis_min"] = float(rng[0])
-                st.session_state["jodi_left_axis_max"] = float(rng[1])
-            except (TypeError, ValueError):
-                pass
-
-    right_manual = bool(preset.get("right_axis_manual_range"))
-    st.session_state["jodi_right_axis_manual_range"] = right_manual
-    if right_manual:
-        rng = preset.get("right_axis_range")
-        if isinstance(rng, (list, tuple)) and len(rng) == 2:
-            try:
-                st.session_state["jodi_right_axis_min"] = float(rng[0])
-                st.session_state["jodi_right_axis_max"] = float(rng[1])
-            except (TypeError, ValueError):
-                pass
-
-    st.session_state["jodi_active_series_override"] = list(preset.get("active_series_keys", []) or [])
-
-    st.session_state["jodi_preset_loaded"] = preset.get("name")
-
-    _trigger_rerun()
-    return True
 
 
 def _country_label(code: str) -> str:
@@ -845,14 +710,21 @@ def _create_single_axis_line_chart(
 
 def _create_dual_axis_chart(
     df: pd.DataFrame,
-    axis_allocation: dict,
+    axis_allocation: dict[str, list[str]],
     label_map: dict,
     data_type: str,
     series_defs: dict,
-    chart_width: int | None = None,
-    chart_height: int | None = None,
+    chart_width: Optional[int] = None,
+    chart_height: Optional[int] = None,
     left_title_offset: float = 0.0,
     right_title_offset: float = 0.0,
+    left_axis_data_type: Optional[str] = None,
+    right_axis_data_type: Optional[str] = None,
+    left_title_override: Optional[str] = None,
+    right_title_override: Optional[str] = None,
+    left_axis_range_override: Optional[list[float]] = None,
+    right_axis_range_override: Optional[list[float]] = None,
+    connect_map: Optional[dict[str, str]] = None,
 ) -> Optional[object]:
     left_cols = [col for col in axis_allocation.get("left", []) if col in df.columns]
     right_cols = [col for col in axis_allocation.get("right", []) if col in df.columns and col not in left_cols]
@@ -866,35 +738,66 @@ def _create_dual_axis_chart(
     if working_df.empty:
         return None
 
-    left_title = _axis_title_for(data_type, left_cols, series_defs)
-    right_title = _axis_title_for(data_type, right_cols, series_defs)
+    left_dtype = left_axis_data_type or data_type
+    right_dtype = right_axis_data_type or data_type
+    left_title_default = _axis_title_for(left_dtype, left_cols, series_defs)
+    right_title_default = _axis_title_for(right_dtype, right_cols, series_defs)
+    left_title = left_title_default if left_title_override is None else left_title_override
+    right_title = right_title_default if right_title_override is None else right_title_override
 
     left_range = _compute_axis_range([working_df[col] for col in left_cols])
     right_range = _compute_axis_range([working_df[col] for col in right_cols])
+
+    if left_axis_range_override and len(left_axis_range_override) == 2:
+        if left_axis_range_override[0] < left_axis_range_override[1]:
+            left_range = list(left_axis_range_override)
+    if right_axis_range_override and len(right_axis_range_override) == 2:
+        if right_axis_range_override[0] < right_axis_range_override[1]:
+            right_range = list(right_axis_range_override)
+
+    zero_line_needed = False
+    if left_range and left_range[0] <= 0 <= left_range[1]:
+        zero_line_needed = True
+    if right_range and right_range[0] <= 0 <= right_range[1]:
+        zero_line_needed = True
+
+    change_types = {"mom", "yoy", "mom_change", "yoy_change"}
+    if left_dtype in change_types or right_dtype in change_types or data_type in change_types:
+        zero_line_needed = True
 
     font_family = "NanumGothic"
     fig = go.Figure()
 
     for idx, col in enumerate(left_cols):
+        label = label_map.get(col, col)
+        connect_flag = True
+        if connect_map is not None and connect_map.get(label) == "week":
+            connect_flag = False
         fig.add_trace(
             go.Scatter(
                 x=working_df.index,
                 y=working_df[col],
-                name=label_map.get(col, col),
+                name=label,
                 line=dict(color=get_kpds_color(idx)),
                 yaxis="y",
+                connectgaps=connect_flag,
             )
         )
 
     for idx, col in enumerate(right_cols):
         color_idx = len(left_cols) + idx
+        label = label_map.get(col, col)
+        connect_flag = True
+        if connect_map is not None and connect_map.get(label) == "week":
+            connect_flag = False
         fig.add_trace(
             go.Scatter(
                 x=working_df.index,
                 y=working_df[col],
-                name=label_map.get(col, col),
+                name=label,
                 line=dict(color=get_kpds_color(color_idx)),
                 yaxis="y2",
+                connectgaps=connect_flag,
             )
         )
 
@@ -937,6 +840,7 @@ def _create_dual_axis_chart(
         tickcolor="white",
         showgrid=False,
         title_text="",
+        zeroline=False,
     )
 
     fig.update_layout(
@@ -950,10 +854,14 @@ def _create_dual_axis_chart(
             side="right",
             showgrid=False,
             title_text="",
+            zeroline=False,
         )
     )
 
     fig = format_date_ticks(fig, "%b-%y", "auto", working_df.index)
+
+    if zero_line_needed:
+        fig.add_hline(y=0, line_width=1, line_color="black", opacity=0.5)
 
     if left_title:
         left_pos = (calculate_title_position(left_title, "left") or -0.03) + left_title_offset
@@ -985,18 +893,21 @@ def _create_dual_axis_chart(
             align="right",
         )
 
-    if data_type in {"mom", "yoy", "mom_change", "yoy_change"}:
-        fig.add_hline(y=0, line_width=1, line_color="black", opacity=0.5)
-
     fig.update_layout(title=None)
 
     # Remove any remaining annotations with text "undefined"
-    fig.update_layout(annotations=[a for a in fig.layout.annotations if getattr(a, "text", None) not in ("undefined", None)])
+    fig.update_layout(
+        annotations=[
+            a
+            for a in fig.layout.annotations
+            if getattr(a, "text", None) not in ("undefined", None)
+        ]
+    )
 
     return _sanitize_plotly_figure(fig)
 
 
-def _make_monthly_five_year_format(series: pd.Series, history_years: int = 5) -> pd.DataFrame | None:
+def _make_monthly_five_year_format(series: pd.Series, history_years: int = 5) -> Optional[pd.DataFrame]:
     if series is None:
         return None
 
@@ -1099,6 +1010,129 @@ def _store_cached_frame(df: pd.DataFrame, cache_path: str) -> None:
         pass  # caching failure should not break execution
 
 
+def _ensure_dash_cache_dir() -> None:
+    try:
+        os.makedirs(DASH_CACHE_DIR, exist_ok=True)
+    except OSError:
+        pass
+
+
+def _latest_jodi_data_mtime() -> float:
+    latest = 0.0
+    for path in (PRIMARY_CSV, SECONDARY_CSV):
+        if os.path.exists(path):
+            try:
+                latest = max(latest, os.path.getmtime(path))
+            except OSError:
+                pass
+
+    split_dir = os.path.join(JODI_DATA_DIR, "split")
+    if os.path.isdir(split_dir):
+        for root, _, files in os.walk(split_dir):
+            for fname in files:
+                ext = os.path.splitext(fname)[1].lower()
+                if ext not in {".csv", ".parquet"}:
+                    continue
+                fpath = os.path.join(root, fname)
+                try:
+                    latest = max(latest, os.path.getmtime(fpath))
+                except OSError:
+                    continue
+    return latest
+
+
+def _read_dash_frame(path: str, index_name: Optional[str] = None) -> Optional[pd.DataFrame]:
+    if not os.path.exists(path):
+        return None
+    try:
+        if DASH_CACHE_BACKEND == "feather":
+            df = pd.read_feather(path)
+            if index_name and index_name in df.columns:
+                df = df.set_index(index_name)
+            return df
+        return pd.read_pickle(path)
+    except Exception:
+        return None
+
+
+def _write_dash_frame(df: pd.DataFrame, path: str, index_name: Optional[str] = None) -> None:
+    _ensure_dash_cache_dir()
+    try:
+        if DASH_CACHE_BACKEND == "feather":
+            if index_name:
+                df_to_save = df.reset_index()
+            else:
+                df_to_save = df.reset_index(drop=True)
+            df_to_save.to_feather(path, version=2)
+        else:
+            df.to_pickle(path)
+    except Exception:
+        pass
+
+
+def _load_dash_cache_meta() -> Optional[dict[str, Any]]:
+    if not os.path.exists(DASH_CACHE_META_FILE):
+        return None
+    try:
+        meta = pd.read_pickle(DASH_CACHE_META_FILE)
+    except Exception:
+        return None
+    if not isinstance(meta, dict):
+        return None
+    if meta.get("version") != DASH_CACHE_VERSION:
+        return None
+    source_mtime = meta.get("source_mtime")
+    if not isinstance(source_mtime, (int, float)):
+        return None
+    if _latest_jodi_data_mtime() > float(source_mtime):
+        return None
+    return meta
+
+
+def _load_dash_cache() -> Optional[dict[str, Any]]:
+    meta = _load_dash_cache_meta()
+    if not meta:
+        return None
+    wide_df = _read_dash_frame(DASH_CACHE_WIDE_FILE, meta.get("wide_index_name"))
+    combos = _read_dash_frame(DASH_CACHE_COMBOS_FILE)
+    options = meta.get("options")
+    units_by_series = meta.get("units_by_series")
+    if not isinstance(wide_df, pd.DataFrame) or not isinstance(combos, pd.DataFrame):
+        return None
+    if not isinstance(options, dict) or not isinstance(units_by_series, dict):
+        return None
+    return {
+        "wide_df": wide_df,
+        "combos": combos,
+        "options": options,
+        "units_by_series": units_by_series,
+    }
+
+
+def _save_dash_cache(
+    wide_df: pd.DataFrame,
+    combos: pd.DataFrame,
+    options: dict[str, Any],
+    units_by_series: dict[str, set[str]],
+) -> None:
+    index_name = wide_df.index.name or "index"
+    _write_dash_frame(wide_df, DASH_CACHE_WIDE_FILE, index_name=index_name)
+    _write_dash_frame(combos, DASH_CACHE_COMBOS_FILE)
+    meta = {
+        "version": DASH_CACHE_VERSION,
+        "source_mtime": _latest_jodi_data_mtime(),
+        "created_at": datetime.now().isoformat(timespec="seconds"),
+        "wide_index_name": index_name,
+        "options": options,
+        "units_by_series": units_by_series,
+    }
+    _ensure_dash_cache_dir()
+    try:
+        pd.to_pickle(meta, DASH_CACHE_META_FILE)
+    except Exception:
+        pass
+
+
 def _normalize_category(series: pd.Series, uppercase: bool = True) -> pd.Series:
     """Return a categorical Series with trimmed/uppercased categories."""
 
@@ -1180,7 +1214,7 @@ def _read_jodi_csv(path: str, section: str) -> pd.DataFrame:
     return df
 
 
-def _load_split_section(section: str) -> pd.DataFrame | None:
+def _load_split_section(section: str) -> Optional[pd.DataFrame]:
     split_dir = os.path.join(JODI_DATA_DIR, "split", section.lower())
     if not os.path.isdir(split_dir):
         return None
@@ -1241,7 +1275,12 @@ def load_jodi_base() -> pd.DataFrame:
     return df
 
 
-def build_series_dataframe_from_df(df: pd.DataFrame, series_defs: dict, start_date: str = "2002-01-01", sections: list | None = None) -> pd.DataFrame:
+def build_series_dataframe_from_df(
+    df: pd.DataFrame,
+    series_defs: dict,
+    start_date: str = "2002-01-01",
+    sections: Optional[list] = None,
+) -> pd.DataFrame:
     """Build a wide DataFrame from a provided base df with optional SECTION filter.
 
     Args:
@@ -1453,471 +1492,365 @@ JODI_SERIES_EXAMPLE = {
 JODI_KOREAN_NAMES = make_korean_names(JODI_SERIES_EXAMPLE)
 
 
-def run_streamlit_app():
-    """Launch an interactive Streamlit app for JODI oil data."""
+# -----------------------------------------------------------------------------
+# Dash app
+# -----------------------------------------------------------------------------
 
-    import streamlit as st
+DEFAULT_CHART_WIDTH_CM = 24.0
+DEFAULT_CHART_HEIGHT_CM = 12.0
 
-    st.set_page_config(page_title="JODI 석유 데이터 시각화", layout="wide")
-    st.title("JODI 석유 데이터 시각화")
-    st.caption("원하는 국가/품목/흐름을 선택하고 다양한 데이터 변환으로 시각화하세요.")
+DATA_TYPE_LABELS = {key: label for key, label in STANDARD_DATA_KEYS}
+CHART_TYPE_OPTIONS = [{"label": label, "value": code} for label, code in CHART_TYPE_LABELS.items()]
 
-    update_notice = st.session_state.pop("jodi_data_update_notice", None)
-    if isinstance(update_notice, dict):
-        status = update_notice.get("status")
-        message = update_notice.get("message", "데이터 업데이트 상태를 확인할 수 없습니다.")
-        if status == "success":
-            st.success(message)
-        elif status == "error":
-            st.error(message)
+
+def _make_empty_figure(message: str) -> go.Figure:
+    fig = go.Figure()
+    fig.update_layout(
+        paper_bgcolor="white",
+        plot_bgcolor="white",
+        width=int(DEFAULT_CHART_WIDTH_CM * PX_PER_CM),
+        height=int(DEFAULT_CHART_HEIGHT_CM * PX_PER_CM),
+        margin=dict(l=40, r=40, t=40, b=40),
+    )
+    fig.add_annotation(
+        text=message,
+        xref="paper",
+        yref="paper",
+        x=0.5,
+        y=0.5,
+        showarrow=False,
+        font=dict(size=14, color="#444"),
+    )
+    return fig
+
+
+def _get_preset_options(presets: dict[str, Any]) -> list[dict[str, str]]:
+    return [{"label": name, "value": name} for name in sorted(presets.keys())]
+
+
+def _default_dtype_for_series(available_types: list[str]) -> str:
+    return available_types[0] if available_types else ""
+
+
+def _collect_selected_infos(
+    selected_keys: Optional[list[str]],
+    registry: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    infos: list[dict[str, Any]] = []
+    for key in selected_keys or []:
+        info = registry.get(key)
+        if info:
+            infos.append(dict(info))
+    return infos
+
+
+def _build_table_rows(
+    selected_infos: list[dict[str, Any]],
+    settings: Optional[dict[str, dict[str, str]]],
+    global_dtype: str,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for info in selected_infos:
+        key = info["key"]
+        stored = settings.get(key, {}) if settings else {}
+        base_label = info.get("leaf_label", info.get("display_label", key))
+        label = stored.get("label") or base_label
+        stored_dtype = stored.get("dtype") or ""
+        override_flag = stored.get("dtype_override")
+        if override_flag is None:
+            override_flag = bool(stored_dtype and stored_dtype != global_dtype)
+        if override_flag and stored_dtype:
+            dtype = stored_dtype
         else:
-            st.info(message)
-
-    @st.cache_data(show_spinner=False)
-    def _load_processed_views():
-        base = load_jodi_base()
-        grouped = (
-            base.groupby(
-                [
-                    "TIME_PERIOD",
-                    "SECTION",
-                    "REF_AREA",
-                    "ENERGY_PRODUCT",
-                    "FLOW_BREAKDOWN",
-                    "UNIT_MEASURE",
-                ],
-                observed=True,
-            )["VALUE_NUM"].sum().astype("float32")
+            dtype = global_dtype
+        if dtype not in info.get("available_types", []):
+            dtype = _default_dtype_for_series(info.get("available_types", []))
+        axis = stored.get("axis") or "left"
+        rows.append(
+            {
+                "key": key,
+                "series": base_label,
+                "label": str(label) if label is not None else base_label,
+                "dtype": dtype,
+                "axis": axis,
+            }
         )
-        wide = grouped.unstack([
-            "SECTION",
-            "REF_AREA",
-            "ENERGY_PRODUCT",
-            "FLOW_BREAKDOWN",
-            "UNIT_MEASURE",
-        ])
-        wide = wide.sort_index()
+    return rows
 
-        def _valid_series(series: pd.Series) -> bool:
-            ser = series.dropna()
-            if ser.empty:
-                return False
-            if (ser.abs() > 1e-6).any():
-                return True
-            recent_window = 36
-            recent = ser.tail(recent_window)
-            if recent.empty:
-                recent = ser
-            if (recent.abs() > 1e-6).any():
-                return True
+
+def _settings_from_rows(
+    rows: Optional[list[dict[str, Any]]],
+    existing: Optional[dict[str, dict[str, str]]] = None,
+    global_dtype: Optional[str] = None,
+) -> dict[str, dict[str, str]]:
+    settings = dict(existing or {})
+    normalized_global = str(global_dtype).strip() if global_dtype else None
+    for row in rows or []:
+        key = row.get("key")
+        if not key:
+            continue
+        label = str(row.get("label") or "").strip()
+        dtype = str(row.get("dtype") or "").strip()
+        dtype_override = False
+        if normalized_global:
+            dtype_override = dtype != "" and dtype != normalized_global
+            if not dtype_override:
+                dtype = ""
+        axis = str(row.get("axis") or "left").strip() or "left"
+        settings[key] = {
+            "label": label,
+            "dtype": dtype,
+            "axis": axis,
+            "dtype_override": dtype_override,
+        }
+    return settings
+
+
+def _prepare_data_table(
+    df: Optional[pd.DataFrame],
+    max_rows: int = 200,
+) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
+    if df is None or df.empty:
+        return [], []
+    display_df = df.copy()
+    if isinstance(display_df.index, pd.DatetimeIndex):
+        display_df = display_df.sort_index()
+    if isinstance(display_df.index, pd.DatetimeIndex):
+        display_df.insert(0, "Date", display_df.index.strftime("%Y-%m-%d"))
+    else:
+        display_df.insert(0, "Index", display_df.index.astype(str))
+    display_df = display_df.tail(max_rows).reset_index(drop=True)
+    columns = [{"name": col, "id": col} for col in display_df.columns]
+    return display_df.to_dict("records"), columns
+
+
+def _extract_axis_range(
+    enabled: bool,
+    min_val: Any,
+    max_val: Any,
+) -> Optional[list[float]]:
+    if not enabled:
+        return None
+    if min_val is None or max_val is None:
+        return None
+    try:
+        min_f = float(min_val)
+        max_f = float(max_val)
+    except (TypeError, ValueError):
+        return None
+    if min_f >= max_f:
+        return None
+    return [min_f, max_f]
+
+
+def _dtype_key_to_axis(dtype_key: Optional[str]) -> str:
+    if not dtype_key:
+        return "raw"
+    dtype_key = dtype_key.strip()
+    if dtype_key.endswith("_data"):
+        return dtype_key.replace("_data", "")
+    return dtype_key
+
+
+@lru_cache(maxsize=1)
+def _load_processed_views_cached() -> tuple[pd.DataFrame, pd.DataFrame, dict[str, list[str]], dict[str, set[str]]]:
+    cached = _load_dash_cache()
+    if cached:
+        wide_cached = cached.get("wide_df")
+        combos_cached = cached.get("combos")
+        options_cached = cached.get("options")
+        units_cached = cached.get("units_by_series")
+        if isinstance(wide_cached, pd.DataFrame) and isinstance(combos_cached, pd.DataFrame):
+            if isinstance(options_cached, dict) and isinstance(units_cached, dict):
+                return wide_cached, combos_cached, options_cached, units_cached
+    wide_df, combos, options, units_by_series = _compute_processed_views()
+    _save_dash_cache(wide_df, combos, options, units_by_series)
+    return wide_df, combos, options, units_by_series
+
+
+def _compute_processed_views() -> tuple[pd.DataFrame, pd.DataFrame, dict[str, list[str]], dict[str, set[str]]]:
+    base = load_jodi_base()
+    grouped = (
+        base.groupby(
+            [
+                "TIME_PERIOD",
+                "SECTION",
+                "REF_AREA",
+                "ENERGY_PRODUCT",
+                "FLOW_BREAKDOWN",
+                "UNIT_MEASURE",
+            ],
+            observed=True,
+        )["VALUE_NUM"]
+        .sum()
+        .astype("float32")
+    )
+    wide = grouped.unstack(
+        ["SECTION", "REF_AREA", "ENERGY_PRODUCT", "FLOW_BREAKDOWN", "UNIT_MEASURE"]
+    ).sort_index()
+
+    def _valid_series(series: pd.Series) -> bool:
+        ser = series.dropna()
+        if ser.empty:
             return False
+        if (ser.abs() > 1e-6).any():
+            return True
+        recent_window = 36
+        recent = ser.tail(recent_window)
+        if recent.empty:
+            recent = ser
+        return (recent.abs() > 1e-6).any()
 
+    if not wide.empty:
         valid_mask = wide.apply(_valid_series, axis=0)
         wide = wide.loc[:, valid_mask]
 
-        combos = wide.columns.to_frame(index=False).reset_index(drop=True)
-        combos.columns = [
-            "SECTION",
-            "REF_AREA",
-            "ENERGY_PRODUCT",
-            "FLOW_BREAKDOWN",
-            "UNIT_MEASURE",
-        ]
+    combos = wide.columns.to_frame(index=False).reset_index(drop=True)
+    combos.columns = [
+        "SECTION",
+        "REF_AREA",
+        "ENERGY_PRODUCT",
+        "FLOW_BREAKDOWN",
+        "UNIT_MEASURE",
+    ]
+    combos["DISPLAY_LABEL"] = combos.apply(
+        lambda row: _series_simple_label(
+            row["REF_AREA"], row["ENERGY_PRODUCT"], row["FLOW_BREAKDOWN"]
+        ),
+        axis=1,
+    )
 
-        combos["DISPLAY_LABEL"] = combos.apply(
-            lambda row: _series_simple_label(
-                row["REF_AREA"], row["ENERGY_PRODUCT"], row["FLOW_BREAKDOWN"]
-            ),
-            axis=1,
-        )
+    units_by_series: dict[str, set[str]] = {}
+    for tup, label in zip(wide.columns, combos["DISPLAY_LABEL"]):
+        units_by_series[label] = units_by_series.get(label, set()) | {tup[4]}
 
-        units_by_series = {}
-        for tup, label in zip(wide.columns, combos["DISPLAY_LABEL"]):
-            units_by_series[label] = units_by_series.get(label, set()) | {tup[4]}
-
-        options = {
-            "sections": sorted(combos["SECTION"].dropna().astype(str).unique().tolist()),
-            "countries": sorted(combos["REF_AREA"].dropna().astype(str).unique().tolist()),
-            "products": sorted(combos["ENERGY_PRODUCT"].dropna().astype(str).unique().tolist()),
-            "flows": sorted(combos["FLOW_BREAKDOWN"].dropna().astype(str).unique().tolist()),
-        }
-
-        return wide.astype("float32"), combos, options, units_by_series
-
-    wide_df, combos_all, options, units_by_series = _load_processed_views()
-    combos_filtered = combos_all.copy()
-    registry: dict[str, dict[str, Any]] = {}
-    tree_nodes: list[dict[str, Any]] = []
-    default_checked: list[str] = []
-
-    with st.sidebar:
-        st.header("데이터 관리")
-        if st.button("데이터 업데이트", key="jodi_data_update_button"):
-            with st.spinner("JODI 데이터를 업데이트하는 중입니다..."):
-                success, message = _update_jodi_data(JODI_DATA_DIR)
-            if success:
-                st.session_state["jodi_data_update_notice"] = {
-                    "status": "success",
-                    "message": message or "JODI 데이터 업데이트가 완료되었습니다.",
-                }
-                try:
-                    _load_processed_views.clear()
-                except Exception:
-                    pass
-                _trigger_rerun()
-            else:
-                st.error(message or "데이터 업데이트에 실패했습니다.")
-
-        st.header("시각화 옵션")
-
-        chart_type = st.selectbox(
-            "차트 유형",
-            (
-                ("multi_line", "멀티 라인"),
-                ("single_line", "단일 라인"),
-                ("dual_axis", "이중 축"),
-                ("horizontal_bar", "가로 바"),
-                ("vertical_bar", "세로 바"),
-                ("five_year", "5년 비교 (월간)"),
-            ),
-            format_func=lambda x: x[1],
-            key="jodi_chart_type_select",
-        )[0]
-
-        chart_width_cm = st.slider("차트 너비 (cm)", min_value=15.0, max_value=45.0, value=24.0, step=0.5)
-        chart_height_cm = st.slider("차트 높이 (cm)", min_value=10.0, max_value=25.0, value=12.0, step=0.5)
-        chart_width = int(chart_width_cm * PX_PER_CM)
-        chart_height = int(chart_height_cm * PX_PER_CM)
-        left_title_offset = st.slider("왼쪽 축 제목 위치 보정", min_value=-0.2, max_value=0.2, value=0.0, step=0.01)
-        right_title_offset = st.slider("오른쪽 축 제목 위치 보정", min_value=-0.2, max_value=0.2, value=0.0, step=0.01)
-        five_year_recent_years = None
-        if chart_type == "five_year":
-            five_year_recent_years = st.slider("최근 비교 연도 수", min_value=3, max_value=6, value=5, step=1)
-        st.session_state["jodi_chart_type"] = chart_type
-        st.session_state["jodi_chart_width_cm"] = chart_width_cm
-        st.session_state["jodi_chart_height_cm"] = chart_height_cm
-        st.session_state["jodi_left_title_offset"] = left_title_offset
-        st.session_state["jodi_right_title_offset"] = right_title_offset
-
-        custom_single_axis_title = ""
-        custom_left_axis_title = ""
-        custom_right_axis_title = ""
-        if chart_type in {"multi_line", "single_line", "horizontal_bar", "vertical_bar", "five_year"}:
-            custom_single_axis_title = st.text_input(
-                "축 제목 (단위 Annotation)",
-                value=st.session_state.get("jodi_single_axis_title", ""),
-                key="jodi_single_axis_title",
-            )
-        if chart_type == "dual_axis":
-            custom_left_axis_title = st.text_input(
-                "왼쪽 축 제목",
-                value=st.session_state.get("jodi_left_axis_title", ""),
-                key="jodi_left_axis_title",
-            )
-            custom_right_axis_title = st.text_input(
-                "오른쪽 축 제목",
-                value=st.session_state.get("jodi_right_axis_title", ""),
-                key="jodi_right_axis_title",
-            )
-
-        st.markdown("---")
-        st.header("시리즈 선택")
-
-        default_country = ["US"] if "US" in options["countries"] else []
-        selected_countries = st.multiselect(
-            "국가 (ISO 2자리)",
-            options["countries"],
-            default=default_country,
-            format_func=_country_label,
-        )
-
-        start_date_input = st.date_input(
-            "시작일",
-            value=datetime(2002, 1, 1),
-            format="YYYY-MM-DD",
-        )
-        start_date_str = start_date_input.strftime("%Y-%m-%d")
-        target_date: Optional[str] = None
-        periods: Optional[int] = None
-
-        if selected_countries:
-            combos_filtered = combos_filtered[combos_filtered["REF_AREA"].isin(selected_countries)]
-
-        combos_sorted = combos_filtered.sort_values(
-            ["SECTION", "REF_AREA", "ENERGY_PRODUCT", "FLOW_BREAKDOWN", "UNIT_MEASURE"]
-        ).reset_index(drop=True)
-
-        registry, tree_nodes, default_checked = build_jodi_series_registry(combos_sorted)
-
-        if not registry:
-            st.info("선택한 조건에 해당하는 시리즈가 없습니다.")
-        else:
-            session_store_key = "jodi_series_selection"
-            if session_store_key not in st.session_state:
-                st.session_state[session_store_key] = list(default_checked)
-
-            if "jodi_selection" not in st.session_state or not st.session_state["jodi_selection"]:
-                st.session_state["jodi_selection"] = list(st.session_state[session_store_key])
-            if "jodi_selection_version" not in st.session_state:
-                st.session_state["jodi_selection_version"] = 0
-            if "jodi_selection_source" not in st.session_state:
-                st.session_state["jodi_selection_source"] = "init"
-
-            selected_series_keys = list(st.session_state["jodi_selection"])
-
-            tree_widget_key = "jodi_series_tree"
-            tree_version_key = "jodi_tree_version"
-            if tree_version_key not in st.session_state:
-                st.session_state[tree_version_key] = 0
-
-            if st.button("선택 초기화", key="jodi_selection_reset"):
-                st.session_state["jodi_selection"] = []
-                st.session_state[session_store_key] = []
-                st.session_state["jodi_selection_version"] += 1
-                st.session_state["jodi_selection_source"] = "reset"
-                st.session_state.pop(tree_widget_key, None)
-                st.session_state[tree_version_key] += 1
-                selected_series_keys = []
-
-            if TREE_AVAILABLE:
-                if st.session_state.get("jodi_selection_source") != "tree":
-                    st.session_state.pop(tree_widget_key, None)
-                tree_result = tree_select(
-                    nodes=tree_nodes,
-                    check_model="leaf",
-                    only_leaf_checkboxes=True,
-                    show_expand_all=True,
-                    checked=selected_series_keys,
-                    key=f"{tree_widget_key}_{st.session_state[tree_version_key]}",
-                )
-                selected_from_tree = tree_result.get("checked", []) if isinstance(tree_result, dict) else []
-                if set(selected_from_tree) != set(st.session_state["jodi_selection"]):
-                    st.session_state["jodi_selection"] = selected_from_tree
-                    st.session_state["jodi_selection_version"] += 1
-                st.session_state["jodi_selection_source"] = "tree"
-                selected_series_keys = list(st.session_state["jodi_selection"])
-            else:
-                st.info("streamlit-tree-select 미설치: 기본 멀티 선택 UI 사용")
-                label_to_key = {info["leaf_label"]: key for key, info in registry.items()}
-                default_labels = [registry[key]["leaf_label"] for key in selected_series_keys if key in registry]
-                selected_labels = st.multiselect(
-                    "시리즈",
-                    options=sorted(label_to_key.keys()),
-                    default=default_labels or [registry[key]["leaf_label"] for key in default_checked if key in registry],
-                    key="jodi_series_fallback",
-                )
-                selected_manual = [label_to_key[label] for label in selected_labels]
-                if set(selected_manual) != set(st.session_state["jodi_selection"]):
-                    st.session_state["jodi_selection"] = selected_manual
-                    st.session_state["jodi_selection_version"] += 1
-                st.session_state["jodi_selection_source"] = "sidebar"
-                selected_series_keys = list(st.session_state["jodi_selection"])
-
-            st.session_state[session_store_key] = list(selected_series_keys)
-
-    combos_display = combos_filtered.sort_values(
-        ["SECTION", "REF_AREA", "ENERGY_PRODUCT", "FLOW_BREAKDOWN", "UNIT_MEASURE"]
-    ).reset_index(drop=True)
-    localized_table = _localized_combo_dataframe(combos_display)
-
-    if not registry:
-        st.warning("선택한 조건에 사용할 수 있는 시리즈가 없습니다.")
-        st.dataframe(localized_table)
-        return
-
-    presets = load_jodi_presets()
-    preset_error = st.session_state.pop("jodi_preset_error", None)
-    if preset_error:
-        st.error(preset_error)
-
-    preset_warning_payload = st.session_state.pop("jodi_preset_warning", None)
-    if isinstance(preset_warning_payload, dict):
-        missing_list = preset_warning_payload.get("missing", [])
-        if missing_list:
-            name = preset_warning_payload.get("name") or "프리셋"
-            st.warning(
-                f"'{name}' 프리셋에서 일부 시리즈를 찾지 못했습니다: "
-                + ", ".join(missing_list)
-            )
-
-    tab_labels = ["현재 설정"] + [f"프리셋 · {name}" for name in sorted(presets.keys())] + ["프리셋 관리"]
-    tab_refs = st.tabs(tab_labels)
-    current_tab = tab_refs[0]
-    preset_management_tab = tab_refs[-1]
-    preset_tab_map = {
-        name: tab_refs[idx + 1]
-        for idx, name in enumerate(sorted(presets.keys()))
+    options = {
+        "sections": sorted(combos["SECTION"].dropna().astype(str).unique().tolist()),
+        "countries": sorted(combos["REF_AREA"].dropna().astype(str).unique().tolist()),
+        "products": sorted(combos["ENERGY_PRODUCT"].dropna().astype(str).unique().tolist()),
+        "flows": sorted(combos["FLOW_BREAKDOWN"].dropna().astype(str).unique().tolist()),
+        "units": sorted(combos["UNIT_MEASURE"].dropna().astype(str).unique().tolist()),
     }
 
-    for preset_name, tab in preset_tab_map.items():
-        payload = presets.get(preset_name) or {}
-        with tab:
-            st.subheader(preset_name)
-            saved_at = payload.get("saved_at")
-            if saved_at:
-                st.caption(f"저장 시각: {saved_at}")
-            st.write(f"- 시리즈: {len(payload.get('series_keys', []))}개")
-            if st.button("이 프리셋 불러오기", key=f"apply_jodi_preset_{preset_name}"):
-                payload_copy = dict(payload)
-                payload_copy["name"] = preset_name
-                apply_jodi_preset(payload_copy, registry)
+    return wide.astype("float32"), combos, options, units_by_series
 
-    selected_series_keys = list(st.session_state.get("jodi_selection", []))
-    selected_infos = [registry[key] for key in selected_series_keys if key in registry]
 
-    if not selected_infos:
-        with current_tab:
-            st.info("시각화할 시리즈를 선택하세요.")
-            st.dataframe(localized_table)
-        return
+@lru_cache(maxsize=1)
+def _build_registry_bundle():
+    wide_df, combos_all, options, units_by_series = _load_processed_views_cached()
+    registry, _, default_checked = build_jodi_series_registry(combos_all)
+    return wide_df, combos_all, options, units_by_series, registry, default_checked
 
-    label_order = [info.get("leaf_label", info["key"]) for info in selected_infos]
-    label_to_info = {info.get("leaf_label", info["key"]): info for info in selected_infos}
 
-    custom_label_state = st.session_state.setdefault("jodi_custom_labels", {})
-    active_keys_set = {info["key"] for info in selected_infos}
-    for stale_key in list(custom_label_state.keys()):
-        if stale_key not in active_keys_set:
-            custom_label_state.pop(stale_key, None)
-            st.session_state.pop(f"jodi_custom_label_input_{stale_key}", None)
+def _clear_jodi_dash_cache() -> None:
+    _load_processed_views_cached.cache_clear()
+    _build_registry_bundle.cache_clear()
+    for path in (
+        DASH_CACHE_META_FILE,
+        DASH_CACHE_WIDE_FILE,
+        DASH_CACHE_COMBOS_FILE,
+        LEGACY_DASH_CACHE_FILE,
+    ):
+        if os.path.exists(path):
+            try:
+                os.remove(path)
+            except OSError:
+                pass
 
-    with st.sidebar.expander("시리즈 레이블 편집", expanded=False):
-        for info in selected_infos:
-            base_label = info.get("leaf_label", info["key"])
-            storage_key = info["key"]
-            input_key = f"jodi_custom_label_input_{storage_key}"
-            default_label = custom_label_state.get(storage_key, base_label)
-            if input_key not in st.session_state:
-                st.session_state[input_key] = default_label
-            current_value = st.text_input(base_label, key=input_key)
-            clean_value = current_value.strip()
-            if clean_value and clean_value != base_label:
-                custom_label_state[storage_key] = clean_value
-            else:
-                custom_label_state.pop(storage_key, None)
 
-    effective_label_map: dict[str, str] = {}
-    for info in selected_infos:
-        base_label = info.get("leaf_label", info["key"])
-        chosen = custom_label_state.get(info["key"], "").strip()
-        final_label = chosen if chosen else base_label
-        effective_label_map[base_label] = final_label
-        info["effective_label"] = final_label
+def _filter_combos(
+    combos: pd.DataFrame,
+    sections: Optional[list[str]],
+    countries: Optional[list[str]],
+    products: Optional[list[str]],
+    flows: Optional[list[str]],
+    units: Optional[list[str]],
+) -> pd.DataFrame:
+    filtered = combos
+    if sections:
+        filtered = filtered[filtered["SECTION"].isin(sections)]
+    if countries:
+        filtered = filtered[filtered["REF_AREA"].isin(countries)]
+    if products:
+        filtered = filtered[filtered["ENERGY_PRODUCT"].isin(products)]
+    if flows:
+        filtered = filtered[filtered["FLOW_BREAKDOWN"].isin(flows)]
+    if units:
+        filtered = filtered[filtered["UNIT_MEASURE"].isin(units)]
+    return filtered
 
-    sidebar_key = f"jodi_active_labels_{st.session_state.get('jodi_selection_version', 0)}"
-    override_keys = st.session_state.pop("jodi_active_series_override", None)
-    if override_keys:
-        override_labels = []
-        key_to_info = {info["key"]: info for info in selected_infos}
-        for key in override_keys:
-            info = key_to_info.get(key)
-            if info:
-                override_labels.append(info.get("effective_label", info.get("leaf_label", key)))
-        if override_labels:
-            st.session_state[sidebar_key] = override_labels
 
-    active_labels = st.sidebar.multiselect(
-        "현재 선택된 시리즈",
-        options=label_order,
-        default=label_order,
-        key=sidebar_key,
-        help="체크 해제하면 해당 시리즈가 제외됩니다.",
-    )
+def _series_options_from_combos(
+    combos: pd.DataFrame,
+    registry: dict[str, dict[str, Any]],
+    selected_keys: Optional[list[str]] = None,
+) -> list[dict[str, str]]:
+    seen: set[str] = set()
+    options: list[dict[str, str]] = []
 
-    if not active_labels:
-        st.sidebar.warning("최소 한 개의 시리즈를 선택하세요.")
-        active_labels = label_order
-
-    active_keys = [label_to_info[label]["key"] for label in active_labels if label in label_to_info]
-    if set(active_keys) != set(selected_series_keys):
-        st.session_state["jodi_selection"] = active_keys
-        st.session_state["jodi_selection_version"] = st.session_state.get("jodi_selection_version", 0) + 1
-        st.session_state["jodi_selection_source"] = "sidebar"
-        st.session_state["jodi_series_selection"] = list(active_keys)
-        selected_series_keys = list(active_keys)
-        selected_infos = [registry[key] for key in selected_series_keys if key in registry]
-        if not selected_infos:
-            with current_tab:
-                st.warning("선택된 시리즈가 없습니다.")
-                st.dataframe(localized_table)
-            return
-        label_order = [info.get("leaf_label", info["key"]) for info in selected_infos]
-        label_to_info = {info.get("leaf_label", info["key"]): info for info in selected_infos}
-
-    data_type_labels = {key: label for key, label in STANDARD_DATA_KEYS}
-    available_union = [
-        key
-        for key, _ in STANDARD_DATA_KEYS
-        if any(key in info.get("available_types", []) for info in selected_infos)
-    ]
-    if not available_union:
-        with current_tab:
-            st.warning("선택한 시리즈에서 사용할 수 있는 데이터 타입이 없습니다.")
-        return
-
-    default_dtype_key = "raw_data" if "raw_data" in available_union else available_union[0]
-    global_dtype_key = st.sidebar.selectbox(
-        "데이터 변환",
-        options=available_union,
-        index=available_union.index(default_dtype_key),
-        format_func=lambda key: data_type_labels.get(key, key),
-        key="jodi_dtype_key",
-        help="선택한 모든 시리즈에 적용할 기본 데이터 변환입니다.",
-    )
-
-    per_series_override = False
-    if len(available_union) > 1 and len(selected_infos) > 1:
-        per_series_override = st.sidebar.checkbox(
-            "시리즈별 데이터 타입 지정",
-            value=st.session_state.get("jodi_dtype_override", False),
-            key="jodi_dtype_override",
+    for _, row in combos.iterrows():
+        key = sectioned_series_key(
+            str(row["SECTION"]),
+            str(row["REF_AREA"]),
+            str(row["ENERGY_PRODUCT"]),
+            str(row["FLOW_BREAKDOWN"]),
+            str(row["UNIT_MEASURE"]),
         )
+        if key in seen:
+            continue
+        info = registry.get(key)
+        if not info:
+            continue
+        leaf_label = info.get("leaf_label", key)
+        section_label = _section_label(info.get("section", ""))
+        option_label = f"{section_label} · {leaf_label}" if section_label else leaf_label
+        options.append({"label": option_label, "value": key})
+        seen.add(key)
 
-    dtype_map: dict[str, str] = {}
-    fallback_messages: list[str] = []
-    if per_series_override:
-        st.sidebar.markdown("#### 시리즈 데이터 타입")
-        for info in selected_infos:
-            allowed_options = [key for key, _ in STANDARD_DATA_KEYS if key in info.get("available_types", [])]
-            if not allowed_options:
-                continue
-            default_index = allowed_options.index(global_dtype_key) if global_dtype_key in allowed_options else 0
-            dtype_choice = st.sidebar.selectbox(
-                info.get("effective_label", info.get("leaf_label", info["key"])),
-                options=allowed_options,
-                index=default_index,
-                format_func=lambda key, labels=data_type_labels: labels.get(key, key),
-                key=f"jodi_dtype_override_{info['key']}",
-            )
-            dtype_map[info["key"]] = dtype_choice
-    else:
-        for info in selected_infos:
-            allowed = info.get("available_types", [])
-            dtype_choice = global_dtype_key if global_dtype_key in allowed else (allowed[0] if allowed else "")
-            if not dtype_choice:
-                continue
-            if dtype_choice != global_dtype_key:
-                fallback_messages.append(
-                    f"{info.get('leaf_label', info['key'])} → {data_type_labels.get(dtype_choice, dtype_choice)}"
-                )
-            dtype_map[info["key"]] = dtype_choice
+    for key in selected_keys or []:
+        if key in seen:
+            continue
+        info = registry.get(key)
+        if not info:
+            continue
+        leaf_label = info.get("leaf_label", key)
+        section_label = _section_label(info.get("section", ""))
+        option_label = f"{section_label} · {leaf_label}" if section_label else leaf_label
+        options.append({"label": option_label, "value": key})
+        seen.add(key)
 
-    if not dtype_map:
-        with current_tab:
-            st.warning("선택한 시리즈에 대한 데이터 타입을 결정할 수 없습니다.")
-        return
+    return options
 
-    series_defs = {info["key"]: info["series_spec"] for info in selected_infos}
-    selected_tuples = [info["column_tuple"] for info in selected_infos]
 
-    start_ts = pd.to_datetime(start_date_str)
+def _build_data_pack(
+    wide_df: pd.DataFrame,
+    selected_infos: list[dict[str, Any]],
+    start_date: Optional[str],
+) -> tuple[Optional[dict[str, pd.DataFrame]], Optional[str]]:
+    if not selected_infos:
+        return None, "시리즈를 선택하세요."
+
+    selected_tuples = [info["column_tuple"] for info in selected_infos if "column_tuple" in info]
+    if not selected_tuples:
+        return None, "선택한 시리즈를 불러올 수 없습니다."
+
+    start_ts = None
+    if start_date:
+        try:
+            start_ts = pd.to_datetime(start_date)
+        except Exception:
+            return None, f"잘못된 날짜 형식입니다: {start_date}"
+
     try:
-        series_df = wide_df.loc[wide_df.index >= start_ts, selected_tuples]
+        if start_ts is not None:
+            series_df = wide_df.loc[wide_df.index >= start_ts, selected_tuples]
+        else:
+            series_df = wide_df.loc[:, selected_tuples]
     except KeyError:
-        with current_tab:
-            st.warning("선택한 시리즈에서 데이터를 찾을 수 없습니다.")
-            st.dataframe(localized_table)
-        return
+        return None, "선택한 시리즈에서 데이터를 찾을 수 없습니다."
+
+    if series_df is None or series_df.empty:
+        return None, "선택한 조건에 데이터가 없습니다."
 
     if isinstance(series_df.columns, pd.MultiIndex):
         series_df.columns = [info["key"] for info in selected_infos]
@@ -1932,427 +1865,1412 @@ def run_streamlit_app():
         "yoy_data": calculate_yoy_percent(series_df),
         "yoy_change": calculate_yoy_change(series_df),
     }
+    return data_pack, None
 
-    combined_df, label_dtype = _build_combined_dataframe_jodi(selected_infos, dtype_map, data_pack)
-    if effective_label_map:
-        combined_df = combined_df.rename(columns=effective_label_map)
+
+def _build_figure_jodi(
+    selected_infos: list[dict[str, Any]],
+    settings: Optional[dict[str, dict[str, str]]],
+    chart_type: str,
+    global_dtype: str,
+    start_date: Optional[str],
+    chart_width_cm: Optional[float],
+    chart_height_cm: Optional[float],
+    axis_titles: dict[str, str],
+    axis_offsets: dict[str, float],
+    manual_ranges: dict[str, Optional[list[float]]],
+    five_year_recent: Optional[int],
+    zero_line: bool,
+) -> tuple[go.Figure, Optional[pd.DataFrame], list[str]]:
+    messages: list[str] = []
+    settings = settings or {}
+
+    if not selected_infos:
+        return _make_empty_figure("시리즈를 선택하세요."), None, messages
+
+    wide_df, _, _, _, _, _ = _build_registry_bundle()
+    data_pack, error_message = _build_data_pack(wide_df, selected_infos, start_date)
+    if error_message:
+        return _make_empty_figure(error_message), None, messages
+    if data_pack is None:
+        return _make_empty_figure("데이터를 불러올 수 없습니다."), None, messages
+
+    dtype_map: dict[str, str] = {}
+    for info in selected_infos:
+        key = info["key"]
+        available = info.get("available_types", [])
+        dtype_choice = settings.get(key, {}).get("dtype") or ""
+        if not dtype_choice:
+            dtype_choice = global_dtype
+        if dtype_choice not in available:
+            dtype_choice = _default_dtype_for_series(available)
+        if not dtype_choice:
+            continue
+        dtype_map[key] = dtype_choice
+
+    if not dtype_map:
+        return _make_empty_figure("데이터 타입을 선택하세요."), None, messages
+
+    combined_df, _ = _build_combined_dataframe_jodi(selected_infos, dtype_map, data_pack)
     if combined_df.empty:
-        with current_tab:
-            st.warning("선택한 시리즈 조합에 대한 데이터가 없습니다.")
-        return
+        return _make_empty_figure("선택한 시리즈에 데이터가 없습니다."), None, messages
 
+    label_map: dict[str, str] = {}
+    label_map_for_chart: dict[str, str] = {}
+    for info in selected_infos:
+        key = info["key"]
+        base_label = info.get("leaf_label", info.get("display_label", key))
+        custom_label = settings.get(key, {}).get("label")
+        if isinstance(custom_label, str):
+            custom_label = custom_label.strip()
+        if not custom_label:
+            custom_label = base_label
+        label_map[base_label] = custom_label
+        label_map_for_chart[key] = custom_label
+        info["effective_label"] = custom_label
+
+    combined_df = combined_df.rename(columns=label_map)
     combined_df = combined_df.dropna(how="all").dropna(axis=1, how="all")
     if combined_df.empty:
-        with current_tab:
-            st.warning("선택한 시리즈의 유효한 데이터가 없습니다.")
-        return
+        return _make_empty_figure("선택한 시리즈에 유효한 데이터가 없습니다."), None, messages
 
-    for info in selected_infos:
-        label = info.get("effective_label", info.get("leaf_label", info["key"]))
-        if label in combined_df.columns:
-            continue
-        base_label = info.get("leaf_label", info["key"])
-        if base_label in combined_df.columns and label != base_label:
-            combined_df = combined_df.rename(columns={base_label: label})
-
-    valid_labels = set(combined_df.columns)
-    selected_infos = [info for info in selected_infos if info.get("effective_label", info.get("leaf_label", info["key"])) in valid_labels]
-    if not selected_infos:
-        with current_tab:
-            st.warning("선택한 시리즈의 데이터가 모두 비어 있습니다.")
-        return
-
-    if fallback_messages:
-        st.sidebar.caption(
-            "기본 타입을 지원하지 않는 시리즈는 다음 타입으로 대체되었습니다:\n- "
-            + "\n- ".join(fallback_messages)
-        )
-
-    display_labels = list(combined_df.columns)
     frequency_map: dict[str, str] = {}
-    for info in selected_infos:
-        label = info.get("effective_label", info.get("leaf_label", info["key"]))
-        series = combined_df.get(label)
+    for label in combined_df.columns:
+        series = combined_df[label]
         if series is None:
             continue
         frequency_map[label] = _infer_series_period(series.dropna())
 
-    series_type_map = {info.get("effective_label", info.get("leaf_label", info["key"])): dtype_map.get(info["key"], "") for info in selected_infos}
-    dtype_set = {series_type_map[label] for label in display_labels if series_type_map.get(label)}
+    dtype_set = {dtype_map.get(info["key"]) for info in selected_infos if dtype_map.get(info["key"])}
+    dtype_uniform = len(dtype_set) == 1
 
+    series_defs = {info["key"]: info.get("series_spec", {}) for info in selected_infos}
     axis_label_default = _axis_title_for(
-        data_type=global_dtype_key[:-5] if global_dtype_key.endswith("_data") else global_dtype_key,
-        keys=[info["key"] for info in selected_infos],
-        series_defs=series_defs,
+        _dtype_key_to_axis(global_dtype),
+        [info["key"] for info in selected_infos],
+        series_defs,
     )
-    if not axis_label_default and len(dtype_set) == 1:
-        axis_label_default = data_type_labels.get(next(iter(dtype_set)), "")
+    if not axis_label_default and dtype_uniform:
+        axis_label_default = DATA_TYPE_LABELS.get(next(iter(dtype_set)), "")
 
-    axis_allocation: Optional[dict[str, list[str]]] = None
-    if chart_type == "dual_axis":
-        st.sidebar.subheader("이중축 배치")
-        default_left_labels = st.session_state.get("jodi_dual_left") or display_labels[: max(1, len(display_labels) // 2)]
-        left_selected_labels = st.sidebar.multiselect(
-            "왼쪽 축",
-            display_labels,
-            default=default_left_labels,
-            key="jodi_dual_left",
+    chart_width = int((chart_width_cm or DEFAULT_CHART_WIDTH_CM) * PX_PER_CM)
+    chart_height = int((chart_height_cm or DEFAULT_CHART_HEIGHT_CM) * PX_PER_CM)
+
+    table_df: Optional[pd.DataFrame] = combined_df.copy()
+    fig: Optional[go.Figure] = None
+
+    single_axis_title = (axis_titles.get("single") or axis_label_default or "").strip()
+    left_axis_title = (axis_titles.get("left") or "").strip()
+    right_axis_title = (axis_titles.get("right") or "").strip()
+
+    if chart_type == "single_line":
+        if combined_df.shape[1] > 1:
+            messages.append("단일 라인 차트는 첫 번째 시리즈만 표시합니다.")
+        fig = _create_single_axis_line_chart(
+            combined_df[[combined_df.columns[0]]],
+            single_axis_title,
+            chart_width,
+            chart_height,
+            zero_line,
+            frequency_map,
         )
-        right_default_labels = st.session_state.get("jodi_dual_right") or [label for label in display_labels if label not in left_selected_labels]
-        if not right_default_labels and display_labels:
-            right_default_labels = display_labels[-1:]
-        right_selected_labels = st.sidebar.multiselect(
-            "오른쪽 축",
-            display_labels,
-            default=right_default_labels,
-            key="jodi_dual_right",
+    elif chart_type == "multi_line":
+        fig = _create_single_axis_line_chart(
+            combined_df,
+            single_axis_title,
+            chart_width,
+            chart_height,
+            zero_line,
+            frequency_map,
         )
-
-        left_clean = [label for label in left_selected_labels if label in display_labels]
-        if not left_clean and display_labels:
-            left_clean = [display_labels[0]]
-        right_clean = [label for label in right_selected_labels if label in display_labels and label not in left_clean]
-        leftovers = [label for label in display_labels if label not in left_clean and label not in right_clean]
-        if not right_clean:
-            if leftovers:
-                right_clean = leftovers
-            elif len(left_clean) > 1:
-                right_clean = [left_clean.pop()]
-
-        axis_allocation = {"left": left_clean, "right": right_clean}
-
-    custom_single_axis_title = st.session_state.get("jodi_single_axis_title", "")
-    custom_left_axis_title = st.session_state.get("jodi_left_axis_title", "")
-    custom_right_axis_title = st.session_state.get("jodi_right_axis_title", "")
-
-    single_axis_range: Optional[list[float]] = None
-    left_axis_range_override: Optional[list[float]] = None
-    right_axis_range_override: Optional[list[float]] = None
-
-    if chart_type == "dual_axis" and axis_allocation:
-        left_auto_range = _compute_axis_range([combined_df[col] for col in axis_allocation.get("left", []) if col in combined_df.columns]) or [0.0, 1.0]
-        right_auto_range = _compute_axis_range([combined_df[col] for col in axis_allocation.get("right", []) if col in combined_df.columns]) or [0.0, 1.0]
-
-        left_manual = st.sidebar.checkbox(
-            "왼쪽 축 범위 직접 설정",
-            value=st.session_state.get("jodi_left_axis_manual_range", False),
-            key="jodi_left_axis_manual_range",
-        )
-        if left_manual:
-            left_min = st.sidebar.number_input(
-                "왼쪽 축 최소값",
-                value=float(st.session_state.get("jodi_left_axis_min", left_auto_range[0])),
-                step=0.1,
-                key="jodi_left_axis_min",
-            )
-            left_max = st.sidebar.number_input(
-                "왼쪽 축 최대값",
-                value=float(st.session_state.get("jodi_left_axis_max", left_auto_range[1])),
-                step=0.1,
-                key="jodi_left_axis_max",
-            )
-            if left_min < left_max:
-                left_axis_range_override = [float(left_min), float(left_max)]
+    elif chart_type == "dual_axis":
+        labels = list(combined_df.columns)
+        axis_allocation: dict[str, list[str]] = {"left": [], "right": []}
+        for info in selected_infos:
+            label = info.get("effective_label", info.get("leaf_label", info["key"]))
+            axis = settings.get(info["key"], {}).get("axis", "left")
+            target = "right" if axis == "right" else "left"
+            axis_allocation[target].append(label)
+        if not axis_allocation["left"] or not axis_allocation["right"]:
+            if len(labels) >= 2:
+                axis_allocation["left"] = labels[:-1]
+                axis_allocation["right"] = labels[-1:]
             else:
-                st.sidebar.warning("왼쪽 축 최소/최대값을 확인하세요.")
+                return _make_empty_figure("이중 축은 2개 이상의 시리즈가 필요합니다."), table_df, messages
 
-        right_manual = st.sidebar.checkbox(
-            "오른쪽 축 범위 직접 설정",
-            value=st.session_state.get("jodi_right_axis_manual_range", False),
-            key="jodi_right_axis_manual_range",
+        series_type_map = {
+            info.get("effective_label", info.get("leaf_label", info["key"])): dtype_map.get(info["key"], "")
+            for info in selected_infos
+        }
+        left_dtype_keys = {series_type_map.get(label) for label in axis_allocation["left"] if series_type_map.get(label)}
+        right_dtype_keys = {series_type_map.get(label) for label in axis_allocation["right"] if series_type_map.get(label)}
+        left_axis_dtype = _dtype_key_to_axis(next(iter(left_dtype_keys))) if len(left_dtype_keys) == 1 else None
+        right_axis_dtype = _dtype_key_to_axis(next(iter(right_dtype_keys))) if len(right_dtype_keys) == 1 else None
+        base_dtype = _dtype_key_to_axis(next(iter(dtype_set))) if dtype_uniform else _dtype_key_to_axis(global_dtype)
+
+        label_series_defs = {
+            info.get("effective_label", info.get("leaf_label", info["key"])): {"unit": info.get("unit", "")}
+            for info in selected_infos
+        }
+
+        fig = _create_dual_axis_chart(
+            df=combined_df,
+            axis_allocation=axis_allocation,
+            label_map={label: label for label in labels},
+            data_type=base_dtype,
+            series_defs=label_series_defs,
+            chart_width=chart_width,
+            chart_height=chart_height,
+            left_title_offset=axis_offsets.get("left", 0.0),
+            right_title_offset=axis_offsets.get("right", 0.0),
+            left_axis_data_type=left_axis_dtype,
+            right_axis_data_type=right_axis_dtype,
+            left_title_override=(left_axis_title or axis_label_default or None),
+            right_title_override=(right_axis_title or axis_label_default or None),
+            left_axis_range_override=manual_ranges.get("left"),
+            right_axis_range_override=manual_ranges.get("right"),
+            connect_map=frequency_map,
         )
-        if right_manual:
-            right_min = st.sidebar.number_input(
-                "오른쪽 축 최소값",
-                value=float(st.session_state.get("jodi_right_axis_min", right_auto_range[0])),
-                step=0.1,
-                key="jodi_right_axis_min",
-            )
-            right_max = st.sidebar.number_input(
-                "오른쪽 축 최대값",
-                value=float(st.session_state.get("jodi_right_axis_max", right_auto_range[1])),
-                step=0.1,
-                key="jodi_right_axis_max",
-            )
-            if right_min < right_max:
-                right_axis_range_override = [float(right_min), float(right_max)]
-            else:
-                st.sidebar.warning("오른쪽 축 최소/최대값을 확인하세요.")
+    elif chart_type == "five_year":
+        if len(selected_infos) > 1:
+            messages.append("5년 비교 차트는 첫 번째 시리즈만 사용합니다.")
+        info = selected_infos[0]
+        raw_df = data_pack.get("raw_data") if isinstance(data_pack, dict) else None
+        if not isinstance(raw_df, pd.DataFrame) or info["key"] not in raw_df.columns:
+            return _make_empty_figure("5년 비교 차트용 데이터가 없습니다."), table_df, messages
+        series = raw_df[info["key"]]
+        if series.dropna().empty:
+            return _make_empty_figure("5년 비교 차트용 데이터가 없습니다."), table_df, messages
+        unit_label = _axis_title_for("raw", [info["key"]], series_defs)
+        recent_years = five_year_recent or 5
+        fig, formatted_df = _create_monthly_five_year_chart(
+            series=series,
+            series_name=info.get("effective_label", info.get("leaf_label", info["key"])),
+            unit_label=unit_label,
+            recent_years=recent_years,
+            chart_width=chart_width,
+            chart_height=chart_height,
+        )
+        if formatted_df is not None:
+            table_df = formatted_df
+    elif chart_type in {"horizontal_bar", "vertical_bar"}:
+        if not dtype_uniform:
+            return _make_empty_figure("막대 차트는 동일한 데이터 타입이 필요합니다."), table_df, messages
+        dtype_value = next(iter(dtype_set)) if dtype_set else global_dtype
+        data_type = _dtype_key_to_axis(dtype_value)
+        fig = plot_economic_series(
+            data_dict=data_pack,
+            series_list=[info["key"] for info in selected_infos],
+            chart_type=chart_type,
+            data_type=data_type,
+            labels=label_map_for_chart,
+            korean_names=label_map_for_chart,
+            left_ytitle=single_axis_title or axis_label_default or None,
+        )
+        if fig is not None:
+            fig.update_layout(width=chart_width, height=chart_height)
     else:
-        auto_range = _compute_axis_range([combined_df[col] for col in combined_df.columns]) or [0.0, 1.0]
-        manual_enabled = st.sidebar.checkbox(
-            "Y축 범위 직접 설정",
-            value=st.session_state.get("jodi_single_axis_manual_range", False),
-            key="jodi_single_axis_manual_range",
-        )
-        if manual_enabled:
-            axis_min_val = st.sidebar.number_input(
-                "Y축 최소값",
-                value=float(st.session_state.get("jodi_single_axis_min", auto_range[0])),
-                step=0.1,
-                key="jodi_single_axis_min",
-            )
-            axis_max_val = st.sidebar.number_input(
-                "Y축 최대값",
-                value=float(st.session_state.get("jodi_single_axis_max", auto_range[1])),
-                step=0.1,
-                key="jodi_single_axis_max",
-            )
-            if axis_min_val < axis_max_val:
-                single_axis_range = [float(axis_min_val), float(axis_max_val)]
-            else:
-                st.sidebar.warning("Y축 최소/최대값을 확인하세요.")
+        return _make_empty_figure("지원하지 않는 차트 유형입니다."), table_df, messages
+
+    if fig is None:
+        return _make_empty_figure("차트를 생성할 수 없습니다."), table_df, messages
+
+    single_axis_range = manual_ranges.get("single")
+    if single_axis_range and chart_type != "dual_axis":
+        if chart_type == "horizontal_bar":
+            fig.update_xaxes(range=single_axis_range)
         else:
-            st.session_state.pop("jodi_single_axis_min", None)
-            st.session_state.pop("jodi_single_axis_max", None)
+            fig.update_yaxes(range=single_axis_range)
 
-    if target_date:
-        try:
-            parsed_date = pd.to_datetime(target_date)
-            combined_df = combined_df.loc[combined_df.index <= parsed_date]
-        except Exception:
-            with current_tab:
-                st.warning(f"잘못된 날짜 형식입니다: {target_date}. 'YYYY-MM-DD' 형식을 사용하세요.")
-            return
-        if combined_df.empty:
-            with current_tab:
-                st.warning(f"{target_date} 이전의 데이터가 없습니다.")
-            return
+    return _sanitize_plotly_figure(fig), table_df, messages
 
-    if periods:
-        combined_df = combined_df.tail(periods)
-        if combined_df.empty:
-            with current_tab:
-                st.warning("선택한 기간에서 표시할 데이터가 없습니다.")
-            return
+WIDE_DF, COMBOS_ALL, FILTER_OPTIONS, UNITS_BY_SERIES, SERIES_REGISTRY, DEFAULT_SERIES_SELECTION = _build_registry_bundle()
 
-    label_map_keys = {info["key"]: info.get("effective_label", info.get("leaf_label", info["key"])) for info in selected_infos}
+SECTION_OPTIONS = [{"label": _section_label(code), "value": code} for code in FILTER_OPTIONS.get("sections", [])]
+COUNTRY_OPTIONS = [{"label": _country_label(code), "value": code} for code in FILTER_OPTIONS.get("countries", [])]
+PRODUCT_OPTIONS = [{"label": _product_label(code), "value": code} for code in FILTER_OPTIONS.get("products", [])]
+FLOW_OPTIONS = [{"label": _flow_label(code), "value": code} for code in FILTER_OPTIONS.get("flows", [])]
+UNIT_OPTIONS = [{"label": _unit_label(code), "value": code} for code in FILTER_OPTIONS.get("units", [])]
 
-    summary_rows = []
+SERIES_OPTIONS = _series_options_from_combos(COMBOS_ALL, SERIES_REGISTRY, DEFAULT_SERIES_SELECTION)
+PRESET_CACHE: dict[str, Any] = load_jodi_presets()
+
+ASSETS_PATH = Path(__file__).resolve().parent.parent / "us_eco" / "assets"
+app = dash.Dash(__name__, assets_folder=str(ASSETS_PATH))
+app.title = "JODI Oil Dashboard (Dash)"
+
+app.layout = html.Div(
+    className="app-shell",
+    children=[
+        html.Div(
+            className="app-header",
+            children=[
+                html.Div(
+                    children=[
+                        html.Div("KPDS Macro Lab", className="brand-kicker"),
+                        html.H2("JODI 석유 데이터", className="app-title"),
+                        html.P(
+                            "국가·품목·흐름 선택과 프리셋으로 빠르게 비교하세요.",
+                            className="app-subtitle",
+                        ),
+                    ]
+                )
+            ],
+        ),
+        html.Div(id="status-message", className="status-message"),
+        html.Div(
+            className="app-body",
+            children=[
+                html.Div(
+                    className="side-panel card",
+                    children=[
+                        html.Div("컨트롤", className="card-title"),
+                        html.Div("데이터 관리", className="card-title"),
+                        html.Button("데이터 업데이트", id="data-update-btn", className="btn btn-secondary"),
+                        html.Div(id="data-update-message", className="preset-message"),
+                        html.Hr(className="divider"),
+                        html.Div("필터", className="card-title"),
+                        html.Label("섹션"),
+                        dcc.Dropdown(
+                            id="section-filter",
+                            options=SECTION_OPTIONS,
+                            value=[],
+                            multi=True,
+                            placeholder="섹션 선택",
+                        ),
+                        html.Label("국가"),
+                        dcc.Dropdown(
+                            id="country-filter",
+                            options=COUNTRY_OPTIONS,
+                            value=[],
+                            multi=True,
+                            placeholder="국가 선택",
+                        ),
+                        html.Label("제품"),
+                        dcc.Dropdown(
+                            id="product-filter",
+                            options=PRODUCT_OPTIONS,
+                            value=[],
+                            multi=True,
+                            placeholder="제품 선택",
+                        ),
+                        html.Label("흐름"),
+                        dcc.Dropdown(
+                            id="flow-filter",
+                            options=FLOW_OPTIONS,
+                            value=[],
+                            multi=True,
+                            placeholder="흐름 선택",
+                        ),
+                        html.Label("단위"),
+                        dcc.Dropdown(
+                            id="unit-filter",
+                            options=UNIT_OPTIONS,
+                            value=[],
+                            multi=True,
+                            placeholder="단위 선택",
+                        ),
+                        html.Label("시작일"),
+                        dcc.DatePickerSingle(
+                            id="start-date",
+                            date=datetime(2002, 1, 1),
+                            display_format="YYYY-MM-DD",
+                        ),
+                        html.Hr(className="divider"),
+                        html.Label("기본 데이터 타입"),
+                        dcc.Dropdown(
+                            id="global-dtype",
+                            options=[{"label": label, "value": key} for key, label in STANDARD_DATA_KEYS],
+                            value="raw_data",
+                            clearable=False,
+                        ),
+                        html.Div("개별 시리즈 타입은 테이블에서 조정합니다.", className="helper-text"),
+                        html.Label("차트 유형", style={"marginTop": "10px"}),
+                        dcc.Dropdown(
+                            id="chart-type",
+                            options=CHART_TYPE_OPTIONS,
+                            value="multi_line",
+                            clearable=False,
+                        ),
+                        html.Label("차트 너비 (cm)", style={"marginTop": "10px"}),
+                        dcc.Input(
+                            id="chart-width",
+                            type="number",
+                            value=DEFAULT_CHART_WIDTH_CM,
+                            min=15,
+                            max=45,
+                            step=0.5,
+                        ),
+                        html.Label("차트 높이 (cm)", style={"marginTop": "10px"}),
+                        dcc.Input(
+                            id="chart-height",
+                            type="number",
+                            value=DEFAULT_CHART_HEIGHT_CM,
+                            min=10,
+                            max=25,
+                            step=0.5,
+                        ),
+                        html.Details(
+                            [
+                                html.Summary("5년 비교 차트"),
+                                dcc.Slider(
+                                    id="five-year-recent",
+                                    min=3,
+                                    max=6,
+                                    step=1,
+                                    value=5,
+                                    marks={i: str(i) for i in range(3, 7)},
+                                ),
+                            ],
+                            open=False,
+                            className="axis-box",
+                        ),
+                        html.Details(
+                            [
+                                html.Summary("차트 보조 옵션"),
+                                dcc.Checklist(
+                                    id="zero-line",
+                                    options=[{"label": "제로 라인 표시", "value": "on"}],
+                                    value=[],
+                                ),
+                            ],
+                            open=False,
+                            className="axis-box",
+                        ),
+                        html.Hr(className="divider"),
+                        html.Div("프리셋", className="card-title"),
+                        dcc.Dropdown(
+                            id="preset-load",
+                            options=_get_preset_options(PRESET_CACHE),
+                            placeholder="프리셋 선택",
+                        ),
+                        html.Div(
+                            [
+                                html.Button("불러오기", id="preset-load-btn", className="btn btn-secondary"),
+                                html.Button("삭제", id="preset-delete-btn", className="btn btn-ghost"),
+                            ],
+                            className="button-row",
+                        ),
+                        html.Label("프리셋 이름", style={"marginTop": "10px"}),
+                        dcc.Input(id="preset-name-input", type="text", value=""),
+                        dcc.Checklist(
+                            id="preset-overwrite",
+                            options=[{"label": "덮어쓰기 허용", "value": "on"}],
+                            value=[],
+                            className="inline-check",
+                            labelStyle={"display": "flex", "alignItems": "center", "gap": "6px"},
+                            inputStyle={"marginRight": "6px"},
+                            style={"marginTop": "6px"},
+                        ),
+                        html.Button("저장", id="preset-save-btn", className="btn btn-primary"),
+                        html.Div(id="preset-message", className="preset-message"),
+                        html.Hr(className="divider"),
+                        html.Div("시리즈 선택", className="card-title"),
+                        html.Button("선택 초기화", id="series-clear-all", className="btn btn-ghost btn-mini"),
+                        dcc.Dropdown(
+                            id="series-select",
+                            options=SERIES_OPTIONS,
+                            value=DEFAULT_SERIES_SELECTION,
+                            multi=True,
+                            placeholder="시리즈 선택",
+                            className="series-select",
+                        ),
+                    ],
+                ),
+                html.Div(
+                    className="main-panel",
+                    children=[
+                        html.Div(
+                            className="card chart-card",
+                            children=[
+                                dcc.Graph(
+                                    id="chart",
+                                    config={
+                                        "displaylogo": False,
+                                        "modeBarButtonsToAdd": [],
+                                        "toImageButtonOptions": {
+                                            "format": "png",
+                                            "scale": 2,
+                                        },
+                                    },
+                                ),
+                                html.Div(
+                                    [
+                                        html.Button(
+                                            "차트 클립보드 복사",
+                                            id="copy-chart-btn",
+                                            className="btn btn-primary",
+                                        ),
+                                        html.Div(id="copy-status", className="copy-status"),
+                                    ],
+                                    className="chart-actions",
+                                ),
+                            ],
+                        ),
+                        html.Div(
+                            className="card axis-card",
+                            children=[
+                                html.Div("축 설정", className="card-title"),
+                                html.Div(
+                                    className="axis-panel",
+                                    children=[
+                                        html.Details(
+                                            [
+                                                html.Summary("축 제목"),
+                                                html.Div(
+                                                    className="axis-fields",
+                                                    children=[
+                                                        html.Div(
+                                                            [
+                                                                html.Label("단일 축 제목"),
+                                                                dcc.Input(
+                                                                    id="single-axis-title",
+                                                                    type="text",
+                                                                    value="",
+                                                                ),
+                                                            ]
+                                                        ),
+                                                        html.Div(
+                                                            [
+                                                                html.Label("왼쪽 축 제목"),
+                                                                dcc.Input(
+                                                                    id="left-axis-title",
+                                                                    type="text",
+                                                                    value="",
+                                                                ),
+                                                            ]
+                                                        ),
+                                                        html.Div(
+                                                            [
+                                                                html.Label("오른쪽 축 제목"),
+                                                                dcc.Input(
+                                                                    id="right-axis-title",
+                                                                    type="text",
+                                                                    value="",
+                                                                ),
+                                                            ]
+                                                        ),
+                                                        html.Div(
+                                                            [
+                                                                html.Label("왼쪽 제목 위치 보정"),
+                                                                dcc.Input(
+                                                                    id="left-title-offset",
+                                                                    type="number",
+                                                                    value=0.0,
+                                                                    step=0.01,
+                                                                ),
+                                                            ]
+                                                        ),
+                                                        html.Div(
+                                                            [
+                                                                html.Label("오른쪽 제목 위치 보정"),
+                                                                dcc.Input(
+                                                                    id="right-title-offset",
+                                                                    type="number",
+                                                                    value=0.0,
+                                                                    step=0.01,
+                                                                ),
+                                                            ]
+                                                        ),
+                                                    ],
+                                                ),
+                                            ],
+                                            open=True,
+                                            className="axis-box",
+                                        ),
+                                        html.Details(
+                                            [
+                                                html.Summary("축 범위"),
+                                                html.Div(
+                                                    className="range-grid",
+                                                    children=[
+                                                        html.Div(
+                                                            [
+                                                                dcc.Checklist(
+                                                                    id="single-axis-manual",
+                                                                    options=[{"label": "단일 축 수동", "value": "on"}],
+                                                                    value=[],
+                                                                )
+                                                            ]
+                                                        ),
+                                                        html.Div(
+                                                            [
+                                                                html.Label("단일 축 최소"),
+                                                                dcc.Input(
+                                                                    id="single-axis-min",
+                                                                    type="number",
+                                                                    step=0.1,
+                                                                ),
+                                                            ]
+                                                        ),
+                                                        html.Div(
+                                                            [
+                                                                html.Label("단일 축 최대"),
+                                                                dcc.Input(
+                                                                    id="single-axis-max",
+                                                                    type="number",
+                                                                    step=0.1,
+                                                                ),
+                                                            ]
+                                                        ),
+                                                        html.Div(
+                                                            [
+                                                                dcc.Checklist(
+                                                                    id="left-axis-manual",
+                                                                    options=[{"label": "왼쪽 축 수동", "value": "on"}],
+                                                                    value=[],
+                                                                )
+                                                            ]
+                                                        ),
+                                                        html.Div(
+                                                            [
+                                                                html.Label("왼쪽 축 최소"),
+                                                                dcc.Input(
+                                                                    id="left-axis-min",
+                                                                    type="number",
+                                                                    step=0.1,
+                                                                ),
+                                                            ]
+                                                        ),
+                                                        html.Div(
+                                                            [
+                                                                html.Label("왼쪽 축 최대"),
+                                                                dcc.Input(
+                                                                    id="left-axis-max",
+                                                                    type="number",
+                                                                    step=0.1,
+                                                                ),
+                                                            ]
+                                                        ),
+                                                        html.Div(
+                                                            [
+                                                                dcc.Checklist(
+                                                                    id="right-axis-manual",
+                                                                    options=[{"label": "오른쪽 축 수동", "value": "on"}],
+                                                                    value=[],
+                                                                )
+                                                            ]
+                                                        ),
+                                                        html.Div(
+                                                            [
+                                                                html.Label("오른쪽 축 최소"),
+                                                                dcc.Input(
+                                                                    id="right-axis-min",
+                                                                    type="number",
+                                                                    step=0.1,
+                                                                ),
+                                                            ]
+                                                        ),
+                                                        html.Div(
+                                                            [
+                                                                html.Label("오른쪽 축 최대"),
+                                                                dcc.Input(
+                                                                    id="right-axis-max",
+                                                                    type="number",
+                                                                    step=0.1,
+                                                                ),
+                                                            ]
+                                                        ),
+                                                    ],
+                                                ),
+                                            ],
+                                            open=True,
+                                            className="axis-box",
+                                        ),
+                                    ],
+                                ),
+                            ],
+                        ),
+                        html.Div(
+                            className="card table-card",
+                            children=[
+                                html.Div("선택된 시리즈", className="card-title"),
+                                dash_table.DataTable(
+                                    id="series-table",
+                                    data=[],
+                                    columns=[],
+                                    editable=True,
+                                    hidden_columns=["key"],
+                                    dropdown={},
+                                    dropdown_conditional=[],
+                                    tooltip_data=[],
+                                    tooltip_delay=0,
+                                    tooltip_duration=None,
+                                    style_table={
+                                        "overflowX": "auto",
+                                        "height": "240px",
+                                        "overflowY": "auto",
+                                        "tableLayout": "fixed",
+                                    },
+                                    style_cell={
+                                        "textAlign": "left",
+                                        "padding": "6px",
+                                        "whiteSpace": "normal",
+                                        "wordBreak": "break-word",
+                                        "lineHeight": "1.2",
+                                        "width": "120px",
+                                        "minWidth": "120px",
+                                        "maxWidth": "120px",
+                                    },
+                                    style_cell_conditional=[
+                                        {
+                                            "if": {"column_id": "series"},
+                                            "width": "260px",
+                                            "minWidth": "260px",
+                                            "maxWidth": "260px",
+                                        },
+                                        {
+                                            "if": {"column_id": "label"},
+                                            "width": "260px",
+                                            "minWidth": "260px",
+                                            "maxWidth": "260px",
+                                        },
+                                        {
+                                            "if": {"column_id": "dtype"},
+                                            "width": "120px",
+                                            "minWidth": "120px",
+                                            "maxWidth": "120px",
+                                        },
+                                        {
+                                            "if": {"column_id": "axis"},
+                                            "width": "100px",
+                                            "minWidth": "100px",
+                                            "maxWidth": "100px",
+                                        },
+                                    ],
+                                    style_data={
+                                        "whiteSpace": "normal",
+                                        "height": "auto",
+                                        "lineHeight": "1.2",
+                                    },
+                                    style_data_conditional=[
+                                        {"if": {"row_index": "odd"}, "backgroundColor": "#f6f2ea"}
+                                    ],
+                                    style_header={
+                                        "fontWeight": "600",
+                                        "backgroundColor": "#efe9dd",
+                                    },
+                                    css=[
+                                        {
+                                            "selector": ".dash-spreadsheet-container table",
+                                            "rule": "table-layout: fixed; width: 100%;",
+                                        },
+                                    ],
+                                ),
+                            ],
+                        ),
+                        html.Div(
+                            className="card table-card",
+                            children=[
+                                html.Details(
+                                    open=False,
+                                    className="table-details",
+                                    children=[
+                                        html.Summary("데이터 미리보기", className="card-title"),
+                                        html.Div(
+                                            [
+                                                html.Button(
+                                                    "CSV 다운로드",
+                                                    id="download-csv-btn",
+                                                    className="btn btn-secondary",
+                                                )
+                                            ],
+                                            className="button-row",
+                                        ),
+                                        dash_table.DataTable(
+                                            id="data-table",
+                                            data=[],
+                                            columns=[],
+                                            page_size=10,
+                                            style_table={
+                                                "overflowX": "auto",
+                                                "height": "240px",
+                                                "overflowY": "auto",
+                                            },
+                                            style_cell={
+                                                "textAlign": "left",
+                                                "padding": "6px",
+                                                "minWidth": "90px",
+                                            },
+                                            style_data_conditional=[
+                                                {"if": {"row_index": "odd"}, "backgroundColor": "#f6f2ea"}
+                                            ],
+                                            style_header={
+                                                "fontWeight": "600",
+                                                "backgroundColor": "#efe9dd",
+                                            },
+                                        ),
+                                    ],
+                                ),
+                            ],
+                        ),
+                    ],
+                ),
+            ],
+        ),
+        dcc.Store(id="series-settings-store", data={}),
+        dcc.Store(id="full-data-store", data=""),
+        dcc.Store(id="data-refresh-store", data=""),
+        dcc.Download(id="download-data"),
+    ],
+)
+
+@app.callback(
+    Output("section-filter", "options"),
+    Output("country-filter", "options"),
+    Output("product-filter", "options"),
+    Output("flow-filter", "options"),
+    Output("unit-filter", "options"),
+    Input("data-refresh-store", "data"),
+)
+def refresh_filter_options(_):
+    _, _, options, _, _, _ = _build_registry_bundle()
+    section_options = [{"label": _section_label(code), "value": code} for code in options.get("sections", [])]
+    country_options = [{"label": _country_label(code), "value": code} for code in options.get("countries", [])]
+    product_options = [{"label": _product_label(code), "value": code} for code in options.get("products", [])]
+    flow_options = [{"label": _flow_label(code), "value": code} for code in options.get("flows", [])]
+    unit_options = [{"label": _unit_label(code), "value": code} for code in options.get("units", [])]
+    return section_options, country_options, product_options, flow_options, unit_options
+
+
+@app.callback(
+    Output("series-select", "options"),
+    Output("series-select", "value"),
+    Input("section-filter", "value"),
+    Input("country-filter", "value"),
+    Input("product-filter", "value"),
+    Input("flow-filter", "value"),
+    Input("unit-filter", "value"),
+    Input("data-refresh-store", "data"),
+    State("series-select", "value"),
+)
+def update_series_options(
+    sections,
+    countries,
+    products,
+    flows,
+    units,
+    _,
+    current_selection,
+):
+    _, combos_all, _, _, registry, default_checked = _build_registry_bundle()
+    filtered = _filter_combos(combos_all, sections, countries, products, flows, units)
+    options = _series_options_from_combos(filtered, registry, current_selection)
+
+    available_keys = [opt["value"] for opt in options]
+    selected = [key for key in (current_selection or []) if key in available_keys]
+    if not selected:
+        fallback = [key for key in default_checked if key in available_keys]
+        selected = fallback if fallback else available_keys[:2]
+    return options, selected
+
+
+@app.callback(
+    Output("series-select", "value", allow_duplicate=True),
+    Input("series-clear-all", "n_clicks"),
+    prevent_initial_call=True,
+)
+def clear_series_selection(n_clicks):
+    if not n_clicks:
+        return no_update
+    return []
+
+
+@app.callback(
+    Output("series-table", "data"),
+    Output("series-table", "columns"),
+    Output("series-table", "dropdown"),
+    Output("series-table", "dropdown_conditional"),
+    Output("series-table", "tooltip_data"),
+    Input("series-select", "value"),
+    Input("global-dtype", "value"),
+    State("series-settings-store", "data"),
+)
+def update_series_table(selected_keys, global_dtype, settings):
+    _, _, _, _, registry, _ = _build_registry_bundle()
+    selected_infos = _collect_selected_infos(selected_keys, registry)
+    rows = _build_table_rows(selected_infos, settings, global_dtype or "raw_data")
+
+    columns = [
+        {"name": "Key", "id": "key"},
+        {"name": "Series", "id": "series", "editable": False},
+        {"name": "Label", "id": "label", "editable": True},
+        {"name": "Data type", "id": "dtype", "editable": True, "presentation": "dropdown"},
+        {"name": "Axis", "id": "axis", "editable": True, "presentation": "dropdown"},
+    ]
+
+    dropdown = {
+        "axis": {
+            "options": [
+                {"label": "Left", "value": "left"},
+                {"label": "Right", "value": "right"},
+            ]
+        },
+    }
+
+    dropdown_conditional = []
     for info in selected_infos:
-        dtype_key = dtype_map.get(info["key"], "")
-        summary_rows.append(
+        dtype_options = [
+            {"label": DATA_TYPE_LABELS.get(key, key), "value": key}
+            for key in info.get("available_types", [])
+        ]
+        if dtype_options:
+            dropdown_conditional.append(
+                {
+                    "if": {"column_id": "dtype", "filter_query": f'{{key}} eq "{info["key"]}"'},
+                    "options": dtype_options,
+                }
+            )
+
+    tooltips = []
+    for row in rows:
+        tooltips.append(
             {
-                "섹션": _section_label(info.get("section", "")),
-                "국가": _country_label(info.get("country", "")),
-                "제품": _product_label(info.get("product", "")),
-                "흐름": _flow_label(info.get("flow", "")),
-                "단위": _unit_label(info.get("unit", "")),
-                "표시 이름": label_map_keys[info["key"]],
-                "데이터 타입": data_type_labels.get(dtype_key, dtype_key),
+                "series": {"value": str(row.get("series") or ""), "type": "text"},
+                "label": {"value": str(row.get("label") or ""), "type": "text"},
             }
         )
 
-    snapshot = {
-        "series_keys": list(selected_series_keys),
-        "custom_labels": dict(custom_label_state),
-        "series_info": summary_rows,
-        "global_dtype_key": global_dtype_key,
-        "per_series_override": per_series_override,
-        "dtype_map": {key: dtype_map.get(key, "") for key in label_map_keys},
-        "chart_type": chart_type,
-        "chart_type_label": next((label for label, code in CHART_TYPE_LABELS.items() if code == chart_type), chart_type),
-        "chart_width_cm": chart_width_cm,
-        "chart_height_cm": chart_height_cm,
-        "single_axis_title": custom_single_axis_title,
-        "left_axis_title": custom_left_axis_title,
-        "right_axis_title": custom_right_axis_title,
-        "left_title_offset": left_title_offset,
-        "right_title_offset": right_title_offset,
-        "dual_axis_left": axis_allocation.get("left", []) if axis_allocation else [],
-        "dual_axis_right": axis_allocation.get("right", []) if axis_allocation else [],
-        "single_axis_manual_range": bool(st.session_state.get("jodi_single_axis_manual_range")),
-        "single_axis_range": single_axis_range,
-        "left_axis_manual_range": bool(st.session_state.get("jodi_left_axis_manual_range")) if axis_allocation else False,
-        "left_axis_range": left_axis_range_override,
-        "right_axis_manual_range": bool(st.session_state.get("jodi_right_axis_manual_range")) if axis_allocation else False,
-        "right_axis_range": right_axis_range_override,
-        "active_series_keys": list(selected_series_keys),
-        "display_labels": display_labels,
-        "axis_label_default": axis_label_default,
-        "frequency_map": frequency_map,
+    return rows, columns, dropdown, dropdown_conditional, tooltips
+
+
+@app.callback(
+    Output("series-settings-store", "data", allow_duplicate=True),
+    Input("series-table", "data"),
+    State("series-settings-store", "data"),
+    State("global-dtype", "value"),
+    prevent_initial_call=True,
+)
+def update_series_settings(table_data, existing, global_dtype):
+    return _settings_from_rows(table_data, existing, global_dtype)
+
+
+@app.callback(
+    Output("chart", "figure"),
+    Output("data-table", "data"),
+    Output("data-table", "columns"),
+    Output("full-data-store", "data"),
+    Output("status-message", "children"),
+    Input("series-select", "value"),
+    Input("series-table", "data"),
+    Input("chart-type", "value"),
+    Input("global-dtype", "value"),
+    Input("start-date", "date"),
+    Input("chart-width", "value"),
+    Input("chart-height", "value"),
+    Input("single-axis-title", "value"),
+    Input("left-axis-title", "value"),
+    Input("right-axis-title", "value"),
+    Input("left-title-offset", "value"),
+    Input("right-title-offset", "value"),
+    Input("single-axis-manual", "value"),
+    Input("single-axis-min", "value"),
+    Input("single-axis-max", "value"),
+    Input("left-axis-manual", "value"),
+    Input("left-axis-min", "value"),
+    Input("left-axis-max", "value"),
+    Input("right-axis-manual", "value"),
+    Input("right-axis-min", "value"),
+    Input("right-axis-max", "value"),
+    Input("five-year-recent", "value"),
+    Input("zero-line", "value"),
+)
+def update_chart(
+    selected_keys,
+    table_data,
+    chart_type,
+    global_dtype,
+    start_date,
+    chart_width_cm,
+    chart_height_cm,
+    single_axis_title,
+    left_axis_title,
+    right_axis_title,
+    left_title_offset,
+    right_title_offset,
+    single_axis_manual,
+    single_axis_min,
+    single_axis_max,
+    left_axis_manual,
+    left_axis_min,
+    left_axis_max,
+    right_axis_manual,
+    right_axis_min,
+    right_axis_max,
+    five_year_recent,
+    zero_line_value,
+):
+    _, _, _, _, registry, _ = _build_registry_bundle()
+    selected_infos = _collect_selected_infos(selected_keys, registry)
+    settings = _settings_from_rows(table_data, global_dtype=global_dtype)
+
+    axis_titles = {
+        "single": single_axis_title or "",
+        "left": left_axis_title or "",
+        "right": right_axis_title or "",
     }
+    axis_offsets = {
+        "left": float(left_title_offset) if left_title_offset is not None else 0.0,
+        "right": float(right_title_offset) if right_title_offset is not None else 0.0,
+    }
+    manual_ranges = {
+        "single": _extract_axis_range("on" in (single_axis_manual or []), single_axis_min, single_axis_max),
+        "left": _extract_axis_range("on" in (left_axis_manual or []), left_axis_min, left_axis_max),
+        "right": _extract_axis_range("on" in (right_axis_manual or []), right_axis_min, right_axis_max),
+    }
+    zero_line = "on" in (zero_line_value or [])
 
-    label_map_for_chart = {info["key"]: label_map_keys[info["key"]] for info in selected_infos}
+    fig, table_df, messages = _build_figure_jodi(
+        selected_infos=selected_infos,
+        settings=settings,
+        chart_type=chart_type or "multi_line",
+        global_dtype=global_dtype or "raw_data",
+        start_date=start_date,
+        chart_width_cm=chart_width_cm,
+        chart_height_cm=chart_height_cm,
+        axis_titles=axis_titles,
+        axis_offsets=axis_offsets,
+        manual_ranges=manual_ranges,
+        five_year_recent=five_year_recent,
+        zero_line=zero_line,
+    )
 
-    zero_line_types = {"mom_data", "yoy_data", "mom_change", "yoy_change"}
-    zero_line = bool(display_labels) and all(label_dtype.get(label) in zero_line_types for label in display_labels)
-    dtype_values_set = {dtype_map.get(info["key"]) for info in selected_infos if dtype_map.get(info["key"])}
-    dtype_uniform = len(dtype_values_set) == 1
+    data_records, data_columns = _prepare_data_table(table_df)
+    full_data_json = ""
+    if isinstance(table_df, pd.DataFrame) and not table_df.empty:
+        full_data_json = table_df.to_json(orient="split", date_format="iso")
 
-    with current_tab:
-        st.subheader("선택된 시리즈")
-        if summary_rows:
-            summary_df = pd.DataFrame(summary_rows)
-            st.dataframe(summary_df)
+    status = ""
+    if messages:
+        status = html.Ul([html.Li(msg) for msg in messages])
 
-        fig = None
-        table_df: Optional[pd.DataFrame] = combined_df.copy()
+    return fig, data_records, data_columns, full_data_json, status
 
-        if chart_type == "multi_line":
-            fig = _create_single_axis_line_chart(
-                combined_df,
-                custom_single_axis_title or axis_label_default,
-                chart_width,
-                chart_height,
-                zero_line,
-                frequency_map,
-            )
-        elif chart_type == "single_line":
-            if len(display_labels) > 1:
-                st.warning("단일 라인 차트는 한 개 시리즈만 표시합니다. 첫 번째 시리즈만 사용합니다.")
-            single_df = combined_df[[display_labels[0]]] if display_labels else combined_df
-            fig = _create_single_axis_line_chart(
-                single_df,
-                custom_single_axis_title or axis_label_default,
-                chart_width,
-                chart_height,
-                zero_line,
-                frequency_map,
-            )
-        elif chart_type == "dual_axis":
-            if not axis_allocation:
-                st.warning("이중 축 차트를 위해 왼쪽/오른쪽 축을 설정하세요.")
-                return
-            left_dtype_keys = {series_type_map.get(label) for label in axis_allocation.get("left", []) if series_type_map.get(label)}
-            right_dtype_keys = {series_type_map.get(label) for label in axis_allocation.get("right", []) if series_type_map.get(label)}
-            left_axis_dtype = next(iter(left_dtype_keys)).replace("_data", "") if len(left_dtype_keys) == 1 else ""
-            right_axis_dtype = next(iter(right_dtype_keys)).replace("_data", "") if len(right_dtype_keys) == 1 else ""
-            base_data_type = global_dtype_key.replace("_data", "")
-            fig = _create_dual_axis_chart(
-                df=combined_df,
-                axis_allocation=axis_allocation,
-                label_map={label: label for label in display_labels},
-                data_type=base_data_type,
-                series_defs={info["key"]: {"unit": info.get("unit", "")} for info in selected_infos},
-                chart_width=chart_width,
-                chart_height=chart_height,
-                left_title_offset=left_title_offset,
-                right_title_offset=right_title_offset,
-                left_axis_data_type=left_axis_dtype,
-                right_axis_data_type=right_axis_dtype,
-                left_title_override=(custom_left_axis_title or axis_label_default or None),
-                right_title_override=(custom_right_axis_title or axis_label_default or None),
-                left_axis_range_override=left_axis_range_override,
-                right_axis_range_override=right_axis_range_override,
-                connect_map=frequency_map,
-            )
-        elif chart_type == "five_year":
-            if len(selected_infos) != 1:
-                st.warning("5년 비교 차트는 하나의 시리즈만 선택하세요.")
-                return
-            info = selected_infos[0]
-            unit_label = _axis_title_for("raw", [info["key"]], series_defs)
-            series_raw = series_df[info["key"]]
-            recent_years = five_year_recent_years or 5
-            fig, formatted_df = _create_monthly_five_year_chart(
-                series=series_raw,
-                series_name=label_map_keys[info["key"]],
-                unit_label=unit_label,
-                recent_years=recent_years,
-                chart_width=chart_width,
-                chart_height=chart_height,
-            )
-            if fig is None or formatted_df is None:
-                st.warning("5년 비교 차트를 생성할 수 있는 데이터가 부족합니다.")
-                return
-            month_labels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-            formatted_df = formatted_df.copy()
-            formatted_df.index = [month_labels[i - 1] if 1 <= i <= 12 else str(i) for i in formatted_df.index]
-            table_df = formatted_df
-        else:
-            if not dtype_uniform:
-                st.warning("해당 차트 유형은 동일한 데이터 타입을 사용해야 합니다. 기본 데이터 타입을 사용하세요.")
-                return
-            dtype_value = next(iter(dtype_values_set)) if dtype_values_set else global_dtype_key
-            dtype_value = dtype_value[:-5] if dtype_value.endswith("_data") else dtype_value
-            fig = plot_economic_series(
-                data_dict=data_pack,
-                series_list=[info["key"] for info in selected_infos],
-                chart_type=chart_type,
-                data_type=dtype_value.replace("_data", ""),
-                periods=periods,
-                target_date=target_date,
-                labels=label_map_for_chart,
-                korean_names=label_map_for_chart,
-                left_ytitle=custom_single_axis_title or axis_label_default or None,
-            )
-            if fig is not None:
-                fig.update_layout(width=chart_width, height=chart_height)
 
-        if fig is not None:
-            fig = _sanitize_plotly_figure(fig)
-            if chart_type != "dual_axis" and single_axis_range:
-                fig.update_yaxes(range=single_axis_range)
-            st.plotly_chart(fig, use_container_width=False)
-        else:
-            st.info("차트를 생성할 수 없습니다. 설정을 확인하세요.")
+@app.callback(
+    Output("download-data", "data"),
+    Input("download-csv-btn", "n_clicks"),
+    State("full-data-store", "data"),
+    prevent_initial_call=True,
+)
+def download_csv(n_clicks, json_payload):
+    if not n_clicks or not json_payload:
+        return no_update
+    try:
+        df = pd.read_json(StringIO(json_payload), orient="split")
+    except ValueError:
+        return no_update
+    filename = f"jodi_dashboard_{datetime.now().strftime('%Y%m%d_%H%M')}.csv"
+    return dcc.send_data_frame(df.to_csv, filename, index=True, encoding="utf-8-sig")
 
-        st.markdown("## 데이터 테이블")
 
-        if chart_type == "five_year":
-            display_df = table_df
-            display_df.index.name = "월"
-        else:
-            if table_df is None or table_df.empty:
-                st.warning("표시할 데이터가 없습니다.")
-                return
-            display_df = table_df
-            display_df.index.name = "날짜"
+@app.callback(
+    Output("preset-load", "options"),
+    Output("preset-load", "value"),
+    Output("series-select", "value", allow_duplicate=True),
+    Output("global-dtype", "value"),
+    Output("chart-type", "value"),
+    Output("chart-width", "value"),
+    Output("chart-height", "value"),
+    Output("single-axis-title", "value"),
+    Output("left-axis-title", "value"),
+    Output("right-axis-title", "value"),
+    Output("left-title-offset", "value"),
+    Output("right-title-offset", "value"),
+    Output("five-year-recent", "value"),
+    Output("single-axis-manual", "value"),
+    Output("single-axis-min", "value"),
+    Output("single-axis-max", "value"),
+    Output("left-axis-manual", "value"),
+    Output("left-axis-min", "value"),
+    Output("left-axis-max", "value"),
+    Output("right-axis-manual", "value"),
+    Output("right-axis-min", "value"),
+    Output("right-axis-max", "value"),
+    Output("zero-line", "value"),
+    Output("series-settings-store", "data"),
+    Output("preset-message", "children"),
+    Output("preset-name-input", "value"),
+    Input("preset-load-btn", "n_clicks"),
+    Input("preset-save-btn", "n_clicks"),
+    Input("preset-delete-btn", "n_clicks"),
+    State("preset-load", "value"),
+    State("preset-name-input", "value"),
+    State("preset-overwrite", "value"),
+    State("series-select", "value"),
+    State("series-table", "data"),
+    State("chart-type", "value"),
+    State("global-dtype", "value"),
+    State("chart-width", "value"),
+    State("chart-height", "value"),
+    State("single-axis-title", "value"),
+    State("left-axis-title", "value"),
+    State("right-axis-title", "value"),
+    State("left-title-offset", "value"),
+    State("right-title-offset", "value"),
+    State("five-year-recent", "value"),
+    State("single-axis-manual", "value"),
+    State("single-axis-min", "value"),
+    State("single-axis-max", "value"),
+    State("left-axis-manual", "value"),
+    State("left-axis-min", "value"),
+    State("left-axis-max", "value"),
+    State("right-axis-manual", "value"),
+    State("right-axis-min", "value"),
+    State("right-axis-max", "value"),
+    State("zero-line", "value"),
+    prevent_initial_call=True,
+)
+def handle_presets(
+    load_clicks,
+    save_clicks,
+    delete_clicks,
+    preset_value,
+    preset_name,
+    overwrite_value,
+    selected_keys,
+    table_data,
+    chart_type,
+    global_dtype,
+    chart_width_cm,
+    chart_height_cm,
+    single_axis_title,
+    left_axis_title,
+    right_axis_title,
+    left_title_offset,
+    right_title_offset,
+    five_year_recent,
+    single_axis_manual,
+    single_axis_min,
+    single_axis_max,
+    left_axis_manual,
+    left_axis_min,
+    left_axis_max,
+    right_axis_manual,
+    right_axis_min,
+    right_axis_max,
+    zero_line_value,
+):
+    ctx = dash.callback_context
+    triggered = ctx.triggered[0]["prop_id"].split(".")[0] if ctx.triggered else None
 
-        st.dataframe(display_df)
+    options = _get_preset_options(PRESET_CACHE)
 
-        csv_data = display_df.to_csv(index=True).encode("utf-8-sig")
-        st.download_button(
-            label="CSV 다운로드",
-            data=csv_data,
-            file_name=f"jodi_{global_dtype_key}_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-            mime="text/csv",
+    defaults = [
+        options,
+        preset_value,
+        no_update,
+        no_update,
+        no_update,
+        no_update,
+        no_update,
+        no_update,
+        no_update,
+        no_update,
+        no_update,
+        no_update,
+        no_update,
+        no_update,
+        no_update,
+        no_update,
+        no_update,
+        no_update,
+        no_update,
+        no_update,
+        no_update,
+        no_update,
+        no_update,
+        no_update,
+        no_update,
+        no_update,
+    ]
+
+    if triggered == "preset-delete-btn":
+        if not preset_value:
+            defaults[24] = "삭제할 프리셋을 선택하세요."
+            return defaults
+        if preset_value in PRESET_CACHE:
+            del PRESET_CACHE[preset_value]
+            save_jodi_presets(PRESET_CACHE)
+            options = _get_preset_options(PRESET_CACHE)
+            defaults[0] = options
+            defaults[1] = None
+            defaults[24] = f"삭제 완료: {preset_value}"
+            return defaults
+        defaults[24] = "프리셋을 찾을 수 없습니다."
+        return defaults
+
+    if triggered == "preset-save-btn":
+        if not preset_name:
+            defaults[24] = "프리셋 이름을 입력하세요."
+            return defaults
+        allow_overwrite = "on" in (overwrite_value or [])
+        if preset_name in PRESET_CACHE and not allow_overwrite:
+            defaults[24] = "이미 존재하는 프리셋입니다. 덮어쓰기를 허용하세요."
+            return defaults
+
+        _, _, _, _, registry, _ = _build_registry_bundle()
+        selected_infos = _collect_selected_infos(selected_keys, registry)
+        if not selected_infos:
+            defaults[24] = "시리즈를 선택한 후 저장하세요."
+            return defaults
+
+        settings = _settings_from_rows(table_data, global_dtype=global_dtype)
+        dtype_map: dict[str, str] = {}
+        custom_labels: dict[str, str] = {}
+        series_labels: dict[str, str] = {}
+        axis_allocation = {"left": [], "right": []}
+
+        for info in selected_infos:
+            key = info["key"]
+            base_label = info.get("leaf_label", info.get("display_label", key))
+            series_labels[key] = base_label
+            label = settings.get(key, {}).get("label") or base_label
+            label = str(label).strip() if label else base_label
+            custom_labels[key] = label
+            axis = settings.get(key, {}).get("axis", "left")
+            axis_allocation["right" if axis == "right" else "left"].append(label)
+
+            dtype_choice = settings.get(key, {}).get("dtype") or global_dtype
+            if dtype_choice not in info.get("available_types", []):
+                dtype_choice = _default_dtype_for_series(info.get("available_types", []))
+            dtype_map[key] = dtype_choice
+
+        display_labels = [custom_labels.get(info["key"], info.get("leaf_label", "")) for info in selected_infos]
+        axis_label_default = _axis_title_for(
+            _dtype_key_to_axis(global_dtype),
+            [info["key"] for info in selected_infos],
+            {info["key"]: info.get("series_spec", {}) for info in selected_infos},
         )
 
-    with preset_management_tab:
-        st.markdown("#### 프리셋 저장")
-        if not snapshot.get("series_keys"):
-            st.info("저장할 설정이 없습니다. 시리즈를 먼저 선택하세요.")
+        single_range = _extract_axis_range("on" in (single_axis_manual or []), single_axis_min, single_axis_max)
+        left_range = _extract_axis_range("on" in (left_axis_manual or []), left_axis_min, left_axis_max)
+        right_range = _extract_axis_range("on" in (right_axis_manual or []), right_axis_min, right_axis_max)
+
+        snapshot = {
+            "series_keys": list(selected_keys or []),
+            "series_labels": series_labels,
+            "custom_labels": custom_labels,
+            "global_dtype_key": global_dtype,
+            "dtype_map": dtype_map,
+            "chart_type": chart_type,
+            "chart_type_label": next(
+                (label for label, code in CHART_TYPE_LABELS.items() if code == chart_type),
+                chart_type,
+            ),
+            "chart_width_cm": float(chart_width_cm) if chart_width_cm is not None else DEFAULT_CHART_WIDTH_CM,
+            "chart_height_cm": float(chart_height_cm) if chart_height_cm is not None else DEFAULT_CHART_HEIGHT_CM,
+            "single_axis_title": single_axis_title or "",
+            "left_axis_title": left_axis_title or "",
+            "right_axis_title": right_axis_title or "",
+            "left_title_offset": float(left_title_offset) if left_title_offset is not None else 0.0,
+            "right_title_offset": float(right_title_offset) if right_title_offset is not None else 0.0,
+            "dual_axis_left": list(axis_allocation.get("left", [])),
+            "dual_axis_right": list(axis_allocation.get("right", [])),
+            "five_year_recent_years": five_year_recent,
+            "active_series_keys": list(selected_keys or []),
+            "display_labels": display_labels,
+            "axis_label_default": axis_label_default,
+            "single_axis_manual_range": single_range is not None,
+            "single_axis_range": single_range,
+            "left_axis_manual_range": left_range is not None,
+            "left_axis_range": left_range,
+            "right_axis_manual_range": right_range is not None,
+            "right_axis_range": right_range,
+            "zero_line": "on" in (zero_line_value or []),
+            "generated_at": datetime.now().isoformat(timespec="seconds"),
+            "saved_at": datetime.now().isoformat(timespec="seconds"),
+            "name": preset_name,
+        }
+
+        PRESET_CACHE[preset_name] = snapshot
+        save_jodi_presets(PRESET_CACHE)
+        options = _get_preset_options(PRESET_CACHE)
+        defaults[0] = options
+        defaults[1] = preset_name
+        defaults[24] = f"저장 완료: {preset_name}"
+        defaults[25] = preset_name
+        return defaults
+
+    if triggered == "preset-load-btn":
+        if not preset_value:
+            defaults[24] = "불러올 프리셋을 선택하세요."
+            return defaults
+        preset = PRESET_CACHE.get(preset_value)
+        if not preset:
+            defaults[24] = "프리셋을 찾을 수 없습니다."
+            return defaults
+
+        _, _, _, _, registry, _ = _build_registry_bundle()
+        series_keys = preset.get("active_series_keys") or preset.get("series_keys") or []
+        available_keys = [key for key in series_keys if key in registry]
+        if not available_keys:
+            defaults[24] = "프리셋에서 사용할 수 있는 시리즈가 없습니다."
+            return defaults
+
+        global_dtype_key = preset.get("global_dtype_key") or "raw_data"
+        chart_type_value = preset.get("chart_type") or "multi_line"
+        custom_labels = preset.get("custom_labels") or {}
+        series_labels = preset.get("series_labels") or {}
+        dtype_map = preset.get("dtype_map") or {}
+        left_labels = set(preset.get("dual_axis_left") or [])
+        right_labels = set(preset.get("dual_axis_right") or [])
+
+        settings: dict[str, dict[str, str]] = {}
+        for key in available_keys:
+            base_label = series_labels.get(key) or registry[key].get("leaf_label", key)
+            label = custom_labels.get(key) or base_label
+            axis = "left"
+            if label in right_labels:
+                axis = "right"
+            elif label in left_labels:
+                axis = "left"
+            dtype_value = dtype_map.get(key, "")
+            dtype_override = bool(dtype_value and dtype_value != global_dtype_key)
+            settings[key] = {
+                "label": label,
+                "dtype": dtype_value if dtype_override else "",
+                "axis": axis,
+                "dtype_override": dtype_override,
+            }
+
+        defaults = [
+            options,
+            preset_value,
+            available_keys,
+            global_dtype_key,
+            chart_type_value,
+            preset.get("chart_width_cm", DEFAULT_CHART_WIDTH_CM),
+            preset.get("chart_height_cm", DEFAULT_CHART_HEIGHT_CM),
+            preset.get("single_axis_title", ""),
+            preset.get("left_axis_title", ""),
+            preset.get("right_axis_title", ""),
+            preset.get("left_title_offset", 0.0),
+            preset.get("right_title_offset", 0.0),
+            preset.get("five_year_recent_years", 5),
+            ["on"] if preset.get("single_axis_manual_range") else [],
+            (preset.get("single_axis_range") or [None, None])[0],
+            (preset.get("single_axis_range") or [None, None])[1],
+            ["on"] if preset.get("left_axis_manual_range") else [],
+            (preset.get("left_axis_range") or [None, None])[0],
+            (preset.get("left_axis_range") or [None, None])[1],
+            ["on"] if preset.get("right_axis_manual_range") else [],
+            (preset.get("right_axis_range") or [None, None])[0],
+            (preset.get("right_axis_range") or [None, None])[1],
+            ["on"] if preset.get("zero_line") else [],
+            settings,
+            f"불러오기 완료: {preset_value}",
+            preset_value,
+        ]
+        return defaults
+
+    return defaults
+
+
+@app.callback(
+    Output("data-update-message", "children"),
+    Output("data-refresh-store", "data"),
+    Input("data-update-btn", "n_clicks"),
+    prevent_initial_call=True,
+)
+def update_jodi_data_callback(n_clicks):
+    if not n_clicks:
+        return no_update, no_update
+    success, message = _update_jodi_data(JODI_DATA_DIR)
+    if success:
+        _clear_jodi_dash_cache()
+        try:
+            wide_df, combos, options, units_by_series = _compute_processed_views()
+            _save_dash_cache(wide_df, combos, options, units_by_series)
+        except Exception:
+            pass
+        return message, datetime.now().isoformat(timespec="seconds")
+    return message, no_update
+
+
+app.clientside_callback(
+    """
+    async function(n_clicks) {
+        if (!n_clicks) {
+            return '';
+        }
+        const container = document.getElementById('chart');
+        if (!container) {
+            return 'Chart not found.';
+        }
+        const plotlyDiv = container.querySelector('.js-plotly-plot');
+        if (!plotlyDiv) {
+            return 'Chart not ready.';
+        }
+        try {
+            if (!navigator.clipboard || !window.ClipboardItem) {
+                return 'Clipboard API not available. Use the download button.';
+            }
+            const dataUrl = await Plotly.toImage(plotlyDiv, {format: 'png', scale: 2});
+            const response = await fetch(dataUrl);
+            const blob = await response.blob();
+            await navigator.clipboard.write([new ClipboardItem({[blob.type]: blob})]);
+            return '차트 이미지를 클립보드에 복사했습니다.';
+        } catch (err) {
+            return '복사 실패: ' + err;
+        }
+    }
+    """,
+    Output("copy-status", "children"),
+    Input("copy-chart-btn", "n_clicks"),
+)
+
+DEFAULT_DASH_PORT = 8051
+
+
+def _parse_port_flag(args: list[str]) -> Optional[int]:
+    for idx, arg in enumerate(args):
+        if arg.startswith("--port="):
+            candidate = arg.split("=", 1)[1].strip()
+        elif arg == "--port" and idx + 1 < len(args):
+            candidate = args[idx + 1].strip()
         else:
-            default_name = st.session_state.get("jodi_preset_save_name", "")
-            preset_name_input = st.text_input("프리셋 이름", value=default_name, key="jodi_preset_save_name")
-            overwrite_allowed = st.checkbox(
-                "동일 이름 덮어쓰기 허용",
-                value=True,
-                key="jodi_preset_overwrite_allowed",
-            )
-            if st.button("현재 설정 저장", key="jodi_preset_save_button"):
-                preset_name = preset_name_input.strip()
-                if not preset_name:
-                    st.warning("프리셋 이름을 입력하세요.")
-                elif not overwrite_allowed and preset_name in presets:
-                    st.warning("이미 존재하는 이름입니다. 다른 이름을 사용하거나 덮어쓰기를 허용하세요.")
-                else:
-                    payload_to_save = dict(snapshot)
-                    payload_to_save["saved_at"] = datetime.now().isoformat(timespec="seconds")
-                    payload_to_save["name"] = preset_name
-                    presets[preset_name] = payload_to_save
-                    save_jodi_presets(presets)
-                    st.success(f"'{preset_name}' 프리셋을 저장했습니다.")
-                    _trigger_rerun()
-
-        st.markdown("#### 프리셋 삭제")
-        if presets:
-            delete_choice = st.selectbox(
-                "삭제할 프리셋",
-                sorted(presets.keys()),
-                key="jodi_preset_delete_choice",
-            )
-            if st.button("선택한 프리셋 삭제", key="jodi_preset_delete_button"):
-                presets.pop(delete_choice, None)
-                save_jodi_presets(presets)
-                st.success(f"'{delete_choice}' 프리셋을 삭제했습니다.")
-                _trigger_rerun()
-        else:
-            st.info("저장된 프리셋이 없습니다.")
+            continue
+        try:
+            return int(candidate)
+        except ValueError:
+            return None
+    return None
 
 
+def _pick_free_port(preferred: int, scan: int = 20) -> int:
+    for port in range(preferred, preferred + max(scan, 1)):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                sock.bind(("127.0.0.1", port))
+            except OSError:
+                continue
+            return port
+    return preferred
+
+
+def _resolve_dash_port() -> int:
+    env_value = os.environ.get("DASH_PORT")
+    port = None
+    if env_value:
+        try:
+            port = int(env_value)
+        except ValueError:
+            port = None
+    if port is None:
+        port = _parse_port_flag(sys.argv)
+    if port is None or port < 1 or port > 65535:
+        port = DEFAULT_DASH_PORT
+    chosen = _pick_free_port(port)
+    if chosen != port:
+        print(f"Port {port} is in use. Using {chosen} instead.")
+    return chosen
+
+
+def run_dash_app(debug: bool = True, port: Optional[int] = None) -> None:
+    chosen_port = port if port is not None else _resolve_dash_port()
+    app.run_server(debug=debug, port=chosen_port)
 
 def _run_cli_demo() -> None:
     print("=== JODI 시각화 도구 (CLI 데모) ===")
@@ -2372,10 +3290,10 @@ if __name__ == "__main__":
         _run_cli_demo()
     else:
         try:
-            run_streamlit_app()
-        except ModuleNotFoundError as exc:  # Graceful fallback when streamlit is missing
-            if getattr(exc, "name", "") == "streamlit":
-                print("⚠️ streamlit 모듈이 설치되어 있지 않습니다. pip install streamlit 후 다시 시도하세요.")
+            run_dash_app()
+        except ModuleNotFoundError as exc:  # Graceful fallback when dash is missing
+            if getattr(exc, "name", "") == "dash":
+                print("dash module not installed. pip install dash and retry.")
                 _run_cli_demo()
             else:
                 raise
