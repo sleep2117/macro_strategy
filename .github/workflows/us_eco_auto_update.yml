@@ -4,6 +4,7 @@ on:
   schedule:
     - cron: '0 0 * * *'   # 09:00 KST
     - cron: '0 12 * * *'  # 21:00 KST
+    - cron: '0 3 * * *'   # 12:00 KST (excel)
   workflow_dispatch:
     inputs:
       batch_list:
@@ -60,10 +61,16 @@ jobs:
         env:
           INPUT_BATCHES: ${{ inputs.batch_list || '' }}
           INPUT_SLOT: ${{ inputs.slot || '' }}
+          INPUT_FORCE_RELOAD: ${{ inputs.force_reload || '' }}
           EVENT_SCHEDULE: ${{ github.event.schedule || '' }}
         run: |
+          FORCE_RELOAD="$INPUT_FORCE_RELOAD"
           if [[ -n "$INPUT_BATCHES" ]]; then
             echo "batches=$INPUT_BATCHES" >> "$GITHUB_OUTPUT"
+            if [[ "$INPUT_BATCHES" == "batch_excel" ]]; then
+              FORCE_RELOAD="true"
+            fi
+            echo "force_reload=$FORCE_RELOAD" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -77,7 +84,9 @@ jobs:
             TIME_SLOT="AM"
           elif [[ "$SLOT" == "0 12 * * *" ]]; then
             TIME_SLOT="PM"
-          elif [[ "$SLOT" =~ ^(AM|PM)$ ]]; then
+          elif [[ "$SLOT" == "0 3 * * *" ]]; then
+            TIME_SLOT="EXCEL"
+          elif [[ "$SLOT" =~ ^(AM|PM|EXCEL)$ ]]; then
             TIME_SLOT="$SLOT"
           else
             hour=$(date -u +%H)
@@ -101,11 +110,16 @@ jobs:
             "6-PM") BATCHES="batch2" ;;                        # Sat 21 KST (재확인)
             "7-AM") BATCHES="batch1" ;;                        # Sun 09 KST (재확인)
             "7-PM") BATCHES="batch2" ;;                        # Sun 21 KST (재확인)
+            "*-EXCEL") BATCHES="batch_excel" ;;
           esac
 
           echo "slot=$TIME_SLOT" >> "$GITHUB_OUTPUT"
           echo "dow=$DOW" >> "$GITHUB_OUTPUT"
           echo "batches=$BATCHES" >> "$GITHUB_OUTPUT"
+          if [[ "$BATCHES" == "batch_excel" ]]; then
+            FORCE_RELOAD="true"
+          fi
+          echo "force_reload=$FORCE_RELOAD" >> "$GITHUB_OUTPUT"
           if [[ -z "$BATCHES" ]]; then
             echo "No batch scheduled for this slot" >> "$GITHUB_STEP_SUMMARY"
           fi
@@ -118,7 +132,7 @@ jobs:
           START_DATE: ${{ inputs.start_date || '' }}
           SLEEP_SECONDS: ${{ inputs.sleep_seconds || '90' }}
           SMART_UPDATE: ${{ inputs.smart_update }}
-          FORCE_RELOAD: ${{ inputs.force_reload }}
+          FORCE_RELOAD: ${{ steps.plan.outputs.force_reload != '' && steps.plan.outputs.force_reload || inputs.force_reload }}
         run: |
           CMD="python us_eco/run_batch.py --batch-list \"$BATCHES\" --sleep-seconds $SLEEP_SECONDS --summary-file us_eco/.batch_summary.json"
           if [[ "$SMART_UPDATE" == "false" ]]; then

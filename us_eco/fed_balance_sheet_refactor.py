@@ -137,7 +137,22 @@ FED_BALANCE_CATEGORIES = {
 # %%
 # === 전역 변수 ===
 CSV_FILE_PATH = data_path('fed_balance_sheet_data_refactored.csv')
-FED_BALANCE_DATA = {}
+FED_BALANCE_DATA = {
+    "raw_data": pd.DataFrame(),
+    "mom_data": pd.DataFrame(),
+    "mom_change": pd.DataFrame(),
+    "yoy_data": pd.DataFrame(),
+    "yoy_change": pd.DataFrame(),
+    "latest_values": {},
+    "load_info": {
+        "loaded": False,
+        "load_time": None,
+        "start_date": None,
+        "series_count": 0,
+        "data_points": 0,
+        "source": None,
+    },
+}
 
 # %%
 # === 데이터 로드 함수 ===
@@ -191,7 +206,7 @@ def plot_fed_balance_series_advanced(series_list, chart_type='multi_line',
                                     data_type='raw', periods=None, target_date=None,
                                     left_ytitle=None, right_ytitle=None):
     """범용 Federal Reserve Balance Sheet 시각화 함수 - 개선된 연속성"""
-    if not FED_BALANCE_DATA:
+    if not FED_BALANCE_DATA or not FED_BALANCE_DATA.get('load_info', {}).get('loaded'):
         print("⚠️ 먼저 load_fed_balance_data()를 실행하세요.")
         return None
 
@@ -267,7 +282,7 @@ def preprocess_fed_data_for_plotting(data_dict, data_type='raw'):
 def export_fed_balance_data(series_list, data_type='raw', periods=None, 
                            target_date=None, export_path=None, file_format='excel'):
     """Federal Reserve Balance Sheet 데이터 export 함수 - export_economic_data 활용"""
-    if not FED_BALANCE_DATA:
+    if not FED_BALANCE_DATA or not FED_BALANCE_DATA.get('load_info', {}).get('loaded'):
         print("⚠️ 먼저 load_fed_balance_data()를 실행하세요.")
         return None
 
@@ -293,7 +308,7 @@ def clear_fed_balance_data():
 
 def get_raw_data(series_names=None):
     """원본 레벨 데이터 반환"""
-    if not FED_BALANCE_DATA or 'raw_data' not in FED_BALANCE_DATA:
+    if not FED_BALANCE_DATA or not FED_BALANCE_DATA.get('load_info', {}).get('loaded') or 'raw_data' not in FED_BALANCE_DATA:
         print("⚠️ 데이터가 로드되지 않았습니다. load_fed_balance_data()를 먼저 실행하세요.")
         return pd.DataFrame()
     
@@ -309,7 +324,7 @@ def get_raw_data(series_names=None):
 
 def get_mom_data(series_names=None):
     """전월대비 변화 데이터 반환"""
-    if not FED_BALANCE_DATA or 'mom_data' not in FED_BALANCE_DATA:
+    if not FED_BALANCE_DATA or not FED_BALANCE_DATA.get('load_info', {}).get('loaded') or 'mom_data' not in FED_BALANCE_DATA:
         print("⚠️ 데이터가 로드되지 않았습니다. load_fed_balance_data()를 먼저 실행하세요.")
         return pd.DataFrame()
     
@@ -325,7 +340,7 @@ def get_mom_data(series_names=None):
 
 def get_yoy_data(series_names=None):
     """전년동월대비 변화 데이터 반환"""
-    if not FED_BALANCE_DATA or 'yoy_data' not in FED_BALANCE_DATA:
+    if not FED_BALANCE_DATA or not FED_BALANCE_DATA.get('load_info', {}).get('loaded') or 'yoy_data' not in FED_BALANCE_DATA:
         print("⚠️ 데이터가 로드되지 않았습니다. load_fed_balance_data()를 먼저 실행하세요.")
         return pd.DataFrame()
     
@@ -341,7 +356,7 @@ def get_yoy_data(series_names=None):
 
 def list_available_series():
     """사용 가능한 시리즈 목록 반환"""
-    if not FED_BALANCE_DATA or 'raw_data' not in FED_BALANCE_DATA:
+    if not FED_BALANCE_DATA or not FED_BALANCE_DATA.get('load_info', {}).get('loaded') or 'raw_data' not in FED_BALANCE_DATA:
         return []
     return list(FED_BALANCE_DATA['raw_data'].columns)
 
@@ -389,7 +404,7 @@ def get_data_status():
 
 def calculate_liquidity_metrics():
     """유동성 지표 계산 함수"""
-    if not FED_BALANCE_DATA or 'raw_data' not in FED_BALANCE_DATA:
+    if not FED_BALANCE_DATA or not FED_BALANCE_DATA.get('load_info', {}).get('loaded') or 'raw_data' not in FED_BALANCE_DATA:
         print("⚠️ 데이터가 로드되지 않았습니다.")
         return pd.DataFrame()
     
@@ -432,7 +447,7 @@ def plot_liquidity_dashboard():
 
 def calculate_reserve_gdp_ratio():
     """지준금 잔액/명목 GDP 비율 계산 함수 (개선된 보간 방식)"""
-    if not FED_BALANCE_DATA or 'raw_data' not in FED_BALANCE_DATA:
+    if not FED_BALANCE_DATA or not FED_BALANCE_DATA.get('load_info', {}).get('loaded') or 'raw_data' not in FED_BALANCE_DATA:
         print("⚠️ 데이터가 로드되지 않았습니다.")
         return pd.DataFrame()
     

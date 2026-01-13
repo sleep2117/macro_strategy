@@ -261,6 +261,21 @@ input {
   box-shadow: none !important;
 }
 
+.series-select .Select-control {
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.series-select .Select-multi-value-wrapper {
+  max-height: 96px;
+  overflow-y: auto;
+  display: block;
+}
+
+.series-select .Select-input {
+  min-height: 28px;
+}
+
 .Select-menu-outer {
   border-radius: 10px;
   border: 1px solid var(--border);
@@ -364,4 +379,77 @@ input {
 
 .inline-check .dash-checklist label {
   margin: 0;
+}
+
+.series-tree {
+  display: grid;
+  gap: 8px;
+  margin-top: 6px;
+  max-height: 46vh;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.tree-category,
+.tree-module {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fbf8f2;
+  padding: 8px 10px;
+}
+
+.tree-category > summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+}
+
+.tree-module {
+  background: #fff;
+  margin-top: 8px;
+}
+
+.tree-module > summary {
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.tree-module-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.tree-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 6px;
+}
+
+.btn-mini {
+  padding: 4px 8px;
+  font-size: 11px;
+  line-height: 1.1;
+}
+
+.tree-checklist label {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  font-size: 12px;
+  color: var(--ink);
+}
+
+.tree-checklist input {
+  width: auto;
+  margin-top: 2px;
+}
+
+.tree-checklist label span {
+  white-space: normal;
+  line-height: 1.2;
 }

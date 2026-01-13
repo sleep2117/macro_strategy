@@ -37,6 +37,11 @@ BATCHES: dict[str, list[str]] = {
     "batch9": ["gdp_analysis_refactor", "personal_income_refactor", "pce_analysis_refactor", "misc_fred_series_refactor"],
     "batch10": ["fed_balance_sheet_refactor", "fed_pmi_refactor", "ism_pmi_refactor"],
     "batch11": ["beveridge_curve_enhanced", "phillips_curve_enhanced"],
+    "batch_excel": [
+        "pce_contributions_refactor",
+        "supply_demand_pce_inflation_refactor",
+        "nyfed_mct_inflation_refactor",
+    ],
 }
 
 # BLS 모듈별 키 매핑 (배치 내에서도 다른 키 사용 가능)
