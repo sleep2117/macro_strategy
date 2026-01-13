@@ -1,0 +1,2 @@
+# Exclude CFTC data/tools from git (manual update only)
+global_universe/cftc/
