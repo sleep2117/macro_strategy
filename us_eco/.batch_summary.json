@@ -1,37 +1,19 @@
 [
   {
-    "batch": "batch11",
-    "module": "beveridge_curve_enhanced",
+    "batch": "batch10",
+    "module": "fed_balance_sheet_refactor",
     "ok": true,
     "message": "성공"
   },
   {
-    "batch": "batch11",
-    "module": "phillips_curve_enhanced",
+    "batch": "batch10",
+    "module": "fed_pmi_refactor",
     "ok": true,
     "message": "성공"
   },
   {
-    "batch": "batch8",
-    "module": "ADP_employ_refactor",
-    "ok": true,
-    "message": "성공"
-  },
-  {
-    "batch": "batch8",
-    "module": "atlanta_wage_growth_refactor",
-    "ok": true,
-    "message": "성공"
-  },
-  {
-    "batch": "batch8",
-    "module": "unemployment_claims_analysis",
-    "ok": true,
-    "message": "성공"
-  },
-  {
-    "batch": "batch8",
-    "module": "indeed_jobs",
+    "batch": "batch10",
+    "module": "ism_pmi_refactor",
     "ok": true,
     "message": "성공"
   }
