@@ -1,7 +1,13 @@
 [
   {
-    "batch": "batch2",
-    "module": "PPI_analysis_refactor",
+    "batch": "batch3",
+    "module": "CES_employ_refactor",
+    "ok": true,
+    "message": "성공"
+  },
+  {
+    "batch": "batch3",
+    "module": "CPS_employ_refactor",
     "ok": true,
     "message": "성공"
   }
