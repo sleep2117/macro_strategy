@@ -1,19 +1,13 @@
 [
   {
-    "batch": "batch6",
-    "module": "industrial_production_refactor",
+    "batch": "batch3",
+    "module": "CES_employ_refactor",
     "ok": true,
     "message": "성공"
   },
   {
-    "batch": "batch6",
-    "module": "construction_spending_refactor",
-    "ok": true,
-    "message": "성공"
-  },
-  {
-    "batch": "batch6",
-    "module": "new_residential_construction_refactor",
+    "batch": "batch3",
+    "module": "CPS_employ_refactor",
     "ok": true,
     "message": "성공"
   }
