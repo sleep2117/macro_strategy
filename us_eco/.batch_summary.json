@@ -1,19 +1,7 @@
 [
   {
-    "batch": "batch7",
-    "module": "house_price_refactor",
-    "ok": true,
-    "message": "성공"
-  },
-  {
-    "batch": "batch7",
-    "module": "house_sales_stock_refactor",
-    "ok": true,
-    "message": "성공"
-  },
-  {
-    "batch": "batch7",
-    "module": "realtor_housing_inventory_refactor",
+    "batch": "batch4",
+    "module": "JOLTS_employ_refactor",
     "ok": true,
     "message": "성공"
   }
