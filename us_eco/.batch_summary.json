@@ -1,19 +1,7 @@
 [
   {
-    "batch": "batch10",
-    "module": "fed_balance_sheet_refactor",
-    "ok": true,
-    "message": "성공"
-  },
-  {
-    "batch": "batch10",
-    "module": "fed_pmi_refactor",
-    "ok": true,
-    "message": "성공"
-  },
-  {
-    "batch": "batch10",
-    "module": "ism_pmi_refactor",
+    "batch": "batch1",
+    "module": "CPI_analysis_refactor",
     "ok": true,
     "message": "성공"
   }
