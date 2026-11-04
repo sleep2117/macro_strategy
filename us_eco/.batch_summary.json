@@ -1,13 +1,19 @@
 [
   {
-    "batch": "batch3",
-    "module": "CES_employ_refactor",
+    "batch": "batch7",
+    "module": "house_price_refactor",
     "ok": true,
     "message": "성공"
   },
   {
-    "batch": "batch3",
-    "module": "CPS_employ_refactor",
+    "batch": "batch7",
+    "module": "house_sales_stock_refactor",
+    "ok": true,
+    "message": "성공"
+  },
+  {
+    "batch": "batch7",
+    "module": "realtor_housing_inventory_refactor",
     "ok": true,
     "message": "성공"
   }
