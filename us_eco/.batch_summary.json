@@ -1,25 +1,19 @@
 [
   {
-    "batch": "batch9",
-    "module": "gdp_analysis_refactor",
+    "batch": "batch10",
+    "module": "fed_balance_sheet_refactor",
     "ok": true,
     "message": "성공"
   },
   {
-    "batch": "batch9",
-    "module": "personal_income_refactor",
+    "batch": "batch10",
+    "module": "fed_pmi_refactor",
     "ok": true,
     "message": "성공"
   },
   {
-    "batch": "batch9",
-    "module": "pce_analysis_refactor",
-    "ok": true,
-    "message": "성공"
-  },
-  {
-    "batch": "batch9",
-    "module": "misc_fred_series_refactor",
+    "batch": "batch10",
+    "module": "ism_pmi_refactor",
     "ok": true,
     "message": "성공"
   }
